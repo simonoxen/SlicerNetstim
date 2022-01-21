@@ -246,6 +246,9 @@ class AdvancedVolumeDisplayWidget(ScriptedLoadableModuleWidget, VTKObservationMi
 
     if self._parameterNode.GetNodeReference("InputVolume"):
       inputVolumeArray = slicer.util.array(self._parameterNode.GetNodeReferenceID("InputVolume"))
+      self.ui.range1Slider.singleStep = (inputVolumeArray.max()-inputVolumeArray.min())/100
+      self.ui.range2Slider.singleStep = (inputVolumeArray.max()-inputVolumeArray.min())/100
+
       self.ui.range1Slider.minimum = inputVolumeArray.min()
       self.ui.range1Slider.maximum = inputVolumeArray.max()
       self.ui.range2Slider.minimum = inputVolumeArray.min()
@@ -346,17 +349,47 @@ class AdvancedVolumeDisplayLogic(ScriptedLoadableModuleLogic):
     outputArray[:,:,:,1] = backupArray
     outputArray[:,:,:,2] = backupArray
 
-    index = ((backupArray<range1[0]) | (backupArray>range1[1])) #& ((backupArray<range2[0]) | (backupArray>range2[1]))
-    outputArray[np.stack((index,index,index),3)] = np.nan
+    range1Index = (backupArray>range1[0]) & (backupArray<range1[1])
+    range2Index = (backupArray>range2[0]) & (backupArray<range2[1])
 
-    index = (backupArray>range1[0]) & (backupArray<range1[1])
-    values = backupArray[index]
-    values = (values - values.min()) / (float(values.max()) - float(values.min()))
-    outputArray[:,:,:,0][index] = values*1.0
-    outputArray[:,:,:,1][index] = values*0.5
-    outputArray[:,:,:,2][index] = values*0.0
+    idx = np.logical_and(np.logical_not(range1Index), np.logical_not(range2Index))
+    if idx.any():
+      outputArray[np.stack((idx,idx,idx),3)] = -1
+
+    # only range 1
+    idx = np.logical_and(range1Index, np.logical_not(range2Index))
+    if idx.any():
+      values = backupArray[idx]
+      values = 1 - (values - values.min()) / (float(values.max()) - float(values.min()))
+      outputArray[:,:,:,0][idx] = values*1.0
+      outputArray[:,:,:,1][idx] = values*0.5
+      outputArray[:,:,:,2][idx] = values*0.0
+
+    # intersection
+    idx = np.logical_and(range1Index, range2Index)
+    if idx.any():
+      values = backupArray[idx]
+      values = (values - values.min()) / (float(values.max()) - float(values.min()))
+      outputArray[:,:,:,0][idx] = 1 - (1-values*1.0) * (1-values*0.0)
+      outputArray[:,:,:,1][idx] = 1 - (1-values*0.5) * (1-values*0.5)
+      outputArray[:,:,:,2][idx] = 1 - (1-values*0.0) * (1-values*1.0)
+
+    # only range 2
+    idx = np.logical_and(np.logical_not(range1Index), range2Index)
+    if idx.any():
+      values = backupArray[idx]
+      values = (values - values.min()) / (float(values.max()) - float(values.min()))
+      outputArray[:,:,:,0][idx] = values*0.0
+      outputArray[:,:,:,1][idx] = values*0.5
+      outputArray[:,:,:,2][idx] = values*1.0
 
     outputVolume.Modified()
+    outputVolume.GetDisplayNode().AutoWindowLevelOff()
+    outputVolume.GetDisplayNode().SetWindowLevelLocked(0)
+    outputVolume.GetDisplayNode().SetWindowLevelMinMax(0,1)
+    outputVolume.GetDisplayNode().SetApplyThreshold(1)
+    outputVolume.GetDisplayNode().SetAutoThreshold(slicer.qMRMLVolumeThresholdWidget.Auto)
+    outputVolume.GetDisplayNode().SetThreshold(0,1)
 
 
 
