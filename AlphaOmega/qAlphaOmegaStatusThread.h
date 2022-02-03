@@ -7,6 +7,8 @@
 #include <QThread>
 #include <QWaitCondition>
 
+#include "vtkMRMLScriptedModuleNode.h"
+
 
 class qAlphaOmegaStatusThread : public QThread
 {
@@ -16,6 +18,9 @@ public:
 
   qAlphaOmegaStatusThread(QObject *parent = nullptr);
   ~qAlphaOmegaStatusThread();
+
+  static void SetParam(vtkMRMLScriptedModuleNode* p){param = p;};
+  static vtkMRMLScriptedModuleNode* param;
 
 signals:
 

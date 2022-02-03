@@ -139,6 +139,8 @@ void qSlicerAlphaOmegaModuleWidget::setup()
   // Singleton Parameter Node
   d->parameterNode = d->logic()->getParameterNode();
 
+  d->alphaOmegaStatusThread->SetParam(d->logic()->getParameterNode());
+
   // Timer
   d->updateChannelsTablesTimer = new QTimer(this);
   // QObject::connect(d->updateChannelsTablesTimer, SIGNAL(timeout()), this, SLOT(updateChannelsTables()));
@@ -149,6 +151,10 @@ void qSlicerAlphaOmegaModuleWidget::setup()
 void qSlicerAlphaOmegaModuleWidget::onConnectPushButton()
 {
   Q_D(qSlicerAlphaOmegaModuleWidget);
+
+  this->onTestPushButton();
+  d->connectPushButton->setText("Disconnect");
+  return;
 
   this->setConnectingFeedback(true);
 
@@ -206,7 +212,7 @@ void qSlicerAlphaOmegaModuleWidget::onTestPushButton()
   d->logic()->sayHelloWorld();
   this->setAndCreateRootSavePath();
   this->populateChannelNamesComboBox();
-  d->alphaOmegaStatusThread->start();
+  // d->alphaOmegaStatusThread->start();
   d->updateChannelsTablesTimer->start(100);
 }
 
@@ -289,6 +295,7 @@ void qSlicerAlphaOmegaModuleWidget::updateChannelsTables()
 void qSlicerAlphaOmegaModuleWidget::onAlignedSignalsButton()
 {
   Q_D(qSlicerAlphaOmegaModuleWidget);
+  d->alphaOmegaStatusThread->start();
   vtkMRMLTableNode* tableNode = vtkMRMLTableNode::SafeDownCast(d->alignedSignalsTableNode->currentNode());
   if (tableNode == nullptr)
   {

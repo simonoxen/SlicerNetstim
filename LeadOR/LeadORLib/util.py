@@ -78,10 +78,10 @@ class Trajectory(VTKObservationMixin):
     if hasattr(slicer.modules,'rootmeansquare'):
       self.RMSNode = slicer.cli.run(slicer.modules.rootmeansquare, None, {'dataFileName': self.alphaOmegaChannelNode.GetChannelFullSavePath()})
       self.addObserver(self.RMSNode, slicer.vtkMRMLCommandLineModuleNode.StatusModifiedEvent, self.onRMSModified)
-    if hasattr(slicer.modules,'matlabcommander'):
-      initCommand = 'addpath("' + os.path.dirname(os.path.abspath(__file__)) + '");addpath(genpath("' + os.path.join(os.path.expanduser('~'),'Documents','MATLAB','wave_clus') + '"))'
-      self.WCNode = slicer.cli.run(slicer.modules.matlabcommander, None, {'cmd':initCommand})
-      self.addObserver(self.WCNode, slicer.vtkMRMLCommandLineModuleNode.StatusModifiedEvent, self.onWCModified)
+    # if hasattr(slicer.modules,'matlabcommander'):
+    #   initCommand = 'addpath("' + os.path.dirname(os.path.abspath(__file__)) + '");addpath(genpath("' + os.path.join(os.path.expanduser('~'),'Documents','MATLAB','wave_clus') + '"))'
+    #   self.WCNode = slicer.cli.run(slicer.modules.matlabcommander, None, {'cmd':initCommand})
+    #   self.addObserver(self.WCNode, slicer.vtkMRMLCommandLineModuleNode.StatusModifiedEvent, self.onWCModified)
 
   def onRMSModified(self, caller, event):
     rmsValue = self.RMSNode.GetParameterAsString('rootMeanSquare')

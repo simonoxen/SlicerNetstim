@@ -12,10 +12,13 @@
 #include "AOTypes.h"
 #include "StreamFormat.h"
 
+#include "vtkMRMLScriptedModuleNode.h"
 
 static const float DRIVE_ZERO_POSITION_MILIM = 25.0;
-static const int SLEEP_TIME_MILIS = 100;
+static const int SLEEP_TIME_MILIS = 500;
 
+
+vtkMRMLScriptedModuleNode* qAlphaOmegaStatusThread::param;
 
 qAlphaOmegaStatusThread::qAlphaOmegaStatusThread(QObject *parent)
     : QThread(parent)
@@ -58,6 +61,8 @@ void qAlphaOmegaStatusThread::run()
   float previousDistanceToTargetMiliM = NAN;
   float distanceToTargetMiliM = NAN;
 
+  float dtts[] = {9.499,9.499,9.499,9.499,9.499,9.499,9.499,9.499,9.499,9.499,7.491,6.990,6.487,5.986,5.483,4.980,4.479,3.977,3.475,2.974,2.473,1.970,1.468,0.967,0.467,0.466,-0.027,-0.035,-0.538,-1.039,-1.541,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033,-3.033};
+  unsigned int dtt_index = 0;
 
   forever
   {
@@ -73,8 +78,8 @@ void qAlphaOmegaStatusThread::run()
     //   deviceWasConnected = deviceIsConnected;
     // }
 
-
-    distanceToTargetMiliM = this->GetDistanceToTargetMiliM();
+    distanceToTargetMiliM = std::stof(this->param->GetParameter("dtt"));
+    // distanceToTargetMiliM = this->GetDistanceToTargetMiliM();
     // distanceToTargetMiliM = 10.0 * ((float) rand()) / (float) RAND_MAX;
     if (distanceToTargetMiliM != previousDistanceToTargetMiliM)
     {

@@ -42,6 +42,7 @@
 #include <cassert>
 #include <cmath> // NAN
 #include <mutex>
+#include <chrono>
 
 // AlphaOmega SDK
 #include "AOSystemAPI.h"
@@ -315,6 +316,15 @@ void vtkSlicerAlphaOmegaLogic::ContinuousGatherAlignedData()
 
   this->AOClearBuffers();
 
+  std::fstream fin;
+  fin.open("C:\\Users\\simon\\Desktop\\recordings2.csv", ios::in);
+  std::string line, word, prev_dtt = "";
+
+  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+  int sleepTimeMiliS = 150;
+
   while (active)
   {
     // Check distance to target
@@ -336,14 +346,32 @@ void vtkSlicerAlphaOmegaLogic::ContinuousGatherAlignedData()
     }
     else
     {
-      int sleepTimeMiliS = 100;
-      Sleep(sleepTimeMiliS);
-      dataCapture = sleepTimeMiliS / 1000.0 * AOChannelNode->GetChannelSamplingRate() * numberOfChannels;
-      for (int i=0; i<numberOfChannels; i++)
+      end = std::chrono::steady_clock::now();
+      // std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[us]" << std::endl;
+      sleepTimeMiliS = (sleepTimeMiliS + (200 - (int)(std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() / 1000.0))) / 2;
+      if (sleepTimeMiliS > 0)
       {
-        for(j=0; j<(dataCapture/numberOfChannels); j++)
+        Sleep(sleepTimeMiliS);
+      }
+      begin = std::chrono::steady_clock::now();
+
+      dataCapture = 200 / 1000.0 * AOChannelNode->GetChannelSamplingRate() * numberOfChannels;
+
+      int i;
+      for(j=0; j<(dataCapture/numberOfChannels); j++)
+      {
+        std::getline(fin, line);
+        std::stringstream s(line);
+        std::getline(s, word, ',');
+        if (strcmp(word.c_str(), prev_dtt.c_str()) != 0)
         {
-          dataBuffer[(i*(dataCapture/numberOfChannels))+j] = j;
+          this->getParameterNode()->SetParameter("dtt",word);
+          prev_dtt = word;
+        }
+        i = 0;
+        while (std::getline(s, word, ',')) {
+          dataBuffer[(i*(dataCapture/numberOfChannels))+j] = (short)(std::stof(word) * 20.0 / 38.147);
+          i = i+1;
         }
       }
     }
@@ -375,6 +403,8 @@ void vtkSlicerAlphaOmegaLogic::ContinuousGatherAlignedData()
       AOChannelNode->AppendNewDataToSaveFile(newDataArray);
     }
 
+    tableNodeIndex = (tableNodeIndex+j)%previewSamples;
+
     // Check to see if we should be shutting down
     this->ThreadActiveLock.lock();
     active = this->ThreadActive;
@@ -387,6 +417,7 @@ void vtkSlicerAlphaOmegaLogic::ContinuousGatherAlignedData()
     AOChannelNode->CloseSaveFile();
   }
   channelPreviewSignalArray->Delete();
+  fin.close();
 }
 
 
@@ -419,6 +450,7 @@ void vtkSlicerAlphaOmegaLogic::createParameterNode()
   node->SetNodeReferenceID("DistanceToTargetTransform", "");
   node->SetNodeReferenceID("AlignedDataTable", "");
   node->SetParameter("AlignedRunning", "false");
+  node->SetParameter("dtt", "10");
 }
 
 //-----------------------------------------------------------------------------

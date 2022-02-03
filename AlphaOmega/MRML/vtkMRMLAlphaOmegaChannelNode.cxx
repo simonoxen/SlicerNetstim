@@ -206,9 +206,26 @@ std::vector<std::string> vtkMRMLAlphaOmegaChannelNode::GetAllChannelsNames()
       channelsNames.push_back(pChannelsInfo[i].channelName);
   }
 
-  channelsNames.push_back("Test");
-  channelsNames.push_back("Test2");
-  channelsNames.push_back("Test3");
+
+   channelsNames.push_back("CLFP_01___Central");              
+   channelsNames.push_back("CLFP_02___Anteriomedial");      
+   channelsNames.push_back("CLFP_03___Anteriolateral");       
+   channelsNames.push_back("CMacro_LFP_01___Central");        
+   channelsNames.push_back("CMacro_LFP_02___Anteriomedial");
+   channelsNames.push_back("CMacro_LFP_03___Anteriolateral"); 
+   channelsNames.push_back("CSPK_01___Central");              
+   channelsNames.push_back("CSPK_02___Anteriomedial");      
+   channelsNames.push_back("CSPK_03___Anteriolateral");       
+   channelsNames.push_back("CRAW_01___Central");              
+   channelsNames.push_back("CRAW_02___Anteriomedial");      
+   channelsNames.push_back("CRAW_03___Anteriolateral");       
+   channelsNames.push_back("CMacro_RAW_01___Central");        
+   channelsNames.push_back("CMacro_RAW_02___Anteriomedial");
+   channelsNames.push_back("CMacro_RAW_03___Anteriolateral"); 
+
+  // channelsNames.push_back("Test");
+  // channelsNames.push_back("Test2");
+  // channelsNames.push_back("Test3");
 
   return channelsNames;
 }
@@ -254,7 +271,7 @@ int vtkMRMLAlphaOmegaChannelNode::InitializeChannelBuffer()
 {
   this->ChannelBufferSizeSamples = this->ChannelBufferSizeMiliSeconds / 1000.0 * this->ChannelSamplingRate;
   this->ChannelBufferSizeSamples += BUFFER_HEADER_SIZE;
-  this->DataBuffer = new short[this->ChannelBufferSizeSamples];
+  // this->DataBuffer = new short[this->ChannelBufferSizeSamples];
   return AddBufferChannel(this->ChannelID, this->ChannelBufferSizeMiliSeconds);
 }
 
