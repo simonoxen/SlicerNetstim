@@ -2,6 +2,7 @@ import os
 import unittest
 import logging
 import vtk, qt, ctk, slicer
+import glob
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
@@ -109,6 +110,14 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     self.layout.addWidget(uiWidget)
     self.ui = slicer.util.childWidgetVariables(uiWidget)
 
+    importFromOptions = glob.glob(os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib', 'ImportFrom', '*.py'))
+    importFromOptions = [os.path.basename(opt).replace('.py','') for opt in importFromOptions]
+    importFromOptions.remove('__init__')
+
+    self.ui.importFromComboBox.clear()
+    self.ui.importFromComboBox.addItems(['Import From...'] + importFromOptions)
+
+
     # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
     # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
     # "setMRMLScene(vtkMRMLScene*)" slot.
@@ -131,16 +140,35 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
     # (in the selected parameter node).
     self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.referenceACPCMSComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.frameACPCMSComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.referenceToFrameTransformComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
     self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
     self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
-    self.ui.headringCoordinatesWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
     self.ui.mountingComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
     self.ui.autoUpdateCheckBox.connect('toggled(bool)', self.updateParameterNodeFromGUI)
+    self.ui.targetMountingRingArcRadioButton.clicked.connect(self.updateParameterNodeFromGUI)
+    self.ui.targetEntryRollRadioButton.clicked.connect(self.updateParameterNodeFromGUI)
+    self.ui.applyXYZToRASCheckBox.clicked.connect(self.updateParameterNodeFromGUI)
+
+    # Coordinate modification
+    self.ui.frameTargetCoordinates.coordinatesChanged.connect(self.onFrameCoordinatesModified)
+    self.ui.frameEntryCoordinates.coordinatesChanged.connect(self.onFrameCoordinatesModified)
+    self.ui.referenceTargetCoordinates.coordinatesChanged.connect(self.onReferenceCoordinatesModified)
+    self.ui.referenceEntryCoordinates.coordinatesChanged.connect(self.onReferenceCoordinatesModified)
+    self.ui.frameTargetCoordinatesSystemComboBox.connect('currentTextChanged(QString)', self.frameTargetCoordinatesSytemChanged)
+    self.ui.frameEntryCoordinatesSystemComboBox.connect('currentTextChanged(QString)', self.frameEntryCoordinatesSytemChanged)
 
     # Buttons
+    self.ui.applyXYZToRASCheckBox.connect('toggled(bool)', self.applyXYZToRASToggled)
+    self.ui.calculateReferenceToFrameTransformPushButton.connect('clicked(bool)', self.onCalculateReferenceToFrameTransform)
     self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.ui.importFromPDFPushButton.connect('clicked(bool)', self.onImportFromPDFPushButton)
+    self.ui.importFromComboBox.connect('currentTextChanged(QString)', self.importFromChanged)
     self.ui.setDefaultResliceDriverPushButton.connect('clicked(bool)', self.onSetDefaultResliceDriver)
+
+    self.ui.targetEntryRollRadioButton.toggle()
+    self.ui.targetMountingRingArcRadioButton.toggle()
 
     # Make sure parameter node is initialized (needed for module reload)
     self.initializeParameterNode()
@@ -232,14 +260,27 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     # Update node selectors and sliders
     self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputTransform"))
+    self.ui.referenceACPCMSComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceACPCMSMarkups"))
+    self.ui.frameACPCMSComboBox.setCurrentNode(self._parameterNode.GetNodeReference("FrameACPCMSMarkups"))
+    self.ui.referenceToFrameTransformComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
+    self.ui.applyXYZToRASCheckBox.checked = int(self._parameterNode.GetParameter("ApplyXYZToRAS"))
     self.ui.arcAngleSliderWidget.value = float(self._parameterNode.GetParameter("ArcAngle"))
     self.ui.ringAngleSliderWidget.value = float(self._parameterNode.GetParameter("RingAngle"))
-    self.ui.headringCoordinatesWidget.coordinates = self._parameterNode.GetParameter("HeadringCoordinates")
+    self.ui.rollAngleSliderWidget.value = float(self._parameterNode.GetParameter("RollAngle"))
     self.ui.mountingComboBox.setCurrentText(self._parameterNode.GetParameter("Mounting"))
     self.ui.autoUpdateCheckBox.setChecked(int(self._parameterNode.GetParameter("AutoUpdate")))
 
+    self.ui.frameTargetCoordinates.coordinates = self._parameterNode.GetParameter("FrameTargetCoordinates")
+    self.ui.frameEntryCoordinates.coordinates = self._parameterNode.GetParameter("FrameEntryCoordinates")
+    self.ui.referenceTargetCoordinates.coordinates = self._parameterNode.GetParameter("ReferenceTargetCoordinates")
+    self.ui.referenceEntryCoordinates.coordinates = self._parameterNode.GetParameter("ReferenceEntryCoordinates")
+
+    self.ui.frameTargetCoordinatesSystemComboBox.currentText = self._parameterNode.GetParameter("FrameTargetCoordinatesSystem")
+    self.ui.frameEntryCoordinatesSystemComboBox.currentText = self._parameterNode.GetParameter("FrameEntryCoordinatesSystem")
+
     # Update buttons states and tooltips
     self.ui.applyButton.enabled = bool(self._parameterNode.GetNodeReference("OutputTransform")) and not int(self._parameterNode.GetParameter("AutoUpdate"))
+    self.ui.calculateReferenceToFrameTransformPushButton.enabled = bool(self._parameterNode.GetNodeReference("ReferenceACPCMSMarkups")) and bool(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
     self.ui.setDefaultResliceDriverPushButton.enabled = bool(self._parameterNode.GetNodeReference("OutputTransform"))
 
     # All the GUI updates are done
@@ -257,9 +298,13 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
     self._parameterNode.SetNodeReferenceID("OutputTransform", self.ui.outputSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("ReferenceACPCMSMarkups", self.ui.referenceACPCMSComboBox.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("FrameACPCMSMarkups", self.ui.frameACPCMSComboBox.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", self.ui.referenceToFrameTransformComboBox.currentNodeID)
+    self._parameterNode.SetParameter("ApplyXYZToRAS", str(int(self.ui.applyXYZToRASCheckBox.checked)))
     self._parameterNode.SetParameter("ArcAngle", str(self.ui.arcAngleSliderWidget.value))
     self._parameterNode.SetParameter("RingAngle", str(self.ui.ringAngleSliderWidget.value))
-    self._parameterNode.SetParameter("HeadringCoordinates", self.ui.headringCoordinatesWidget.coordinates)
+    self._parameterNode.SetParameter("RollAngle", str(self.ui.rollAngleSliderWidget.value))
     self._parameterNode.SetParameter("Mounting", self.ui.mountingComboBox.currentText)
     self._parameterNode.SetParameter("AutoUpdate", str(int(self.ui.autoUpdateCheckBox.checked)))
 
@@ -269,22 +314,115 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     if int(self._parameterNode.GetParameter("AutoUpdate")):
       self.onApplyButton()
 
-  def onImportFromPDFPushButton(self):
-    # select PDF
-    filePath = qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf')
-    if filePath == '':
+  def onFrameCoordinatesModified(self):
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
       return
-    # get planning
-    planningDictionary = StereotacticPlanLib.util.exctractPlanningFromPDF(filePath)
-    if not planningDictionary:
-      return
-    # set values
+
     wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
-    self._parameterNode.SetParameter("ArcAngle", planningDictionary["Arc Angle"])
-    self._parameterNode.SetParameter("RingAngle", planningDictionary["Ring Angle"])
-    self._parameterNode.SetParameter("HeadringCoordinates", planningDictionary["Headring Coordinates"])
-    self._parameterNode.SetParameter("Mounting", planningDictionary["Mounting"])
+
+    frameTargetCoordinates = np.array(self.ui.frameTargetCoordinates.coordinates.split(','), dtype=float)
+    frameEntryCoordinates = np.array(self.ui.frameEntryCoordinates.coordinates.split(','), dtype=float)
+
+    self._parameterNode.SetParameter("FrameTargetCoordinates", self.ui.frameTargetCoordinates.coordinates)
+    self._parameterNode.SetParameter("FrameEntryCoordinates", self.ui.frameEntryCoordinates.coordinates)
+  
+    referenceToFrameTransform = self._parameterNode.GetNodeReference("ReferenceToFrameTransform")
+    if referenceToFrameTransform:
+
+      if self.ui.frameTargetCoordinatesSystemComboBox.currentText == 'XYZ':
+        frameTargetCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameTargetCoordinates)
+      if self.ui.frameEntryCoordinatesSystemComboBox.currentText == 'XYZ':
+        frameEntryCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameEntryCoordinates)
+ 
+      referenceTargetCoordinates = referenceToFrameTransform.GetMatrixTransformFromParent().MultiplyFloatPoint(np.append(frameTargetCoordinates, 1))[:3]
+      referenceEntryCoordinates = referenceToFrameTransform.GetMatrixTransformFromParent().MultiplyFloatPoint(np.append(frameEntryCoordinates, 1))[:3]
+
+      self._parameterNode.SetParameter("ReferenceTargetCoordinates", ','.join([str(x) for x in referenceTargetCoordinates]))
+      self._parameterNode.SetParameter("ReferenceEntryCoordinates", ','.join([str(x) for x in referenceEntryCoordinates]))
+
     self._parameterNode.EndModify(wasModified)
+
+    if int(self._parameterNode.GetParameter("AutoUpdate")):
+      self.onApplyButton()
+
+  def onReferenceCoordinatesModified(self):
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+
+    referenceTargetCoordinates = np.array(self.ui.referenceTargetCoordinates.coordinates.split(','), dtype=float)
+    referenceEntryCoordinates = np.array(self.ui.referenceEntryCoordinates.coordinates.split(','), dtype=float)
+
+    self._parameterNode.SetParameter("ReferenceTargetCoordinates", self.ui.referenceTargetCoordinates.coordinates)
+    self._parameterNode.SetParameter("ReferenceEntryCoordinates", self.ui.referenceEntryCoordinates.coordinates)
+ 
+    referenceToFrameTransform = self._parameterNode.GetNodeReference("ReferenceToFrameTransform")
+    if referenceToFrameTransform:
+
+      frameTargetCoordinates = referenceToFrameTransform.GetMatrixTransformToParent().MultiplyFloatPoint(np.append(referenceTargetCoordinates, 1))[:3]
+      frameEntryCoordinates = referenceToFrameTransform.GetMatrixTransformToParent().MultiplyFloatPoint(np.append(referenceEntryCoordinates, 1))[:3]
+
+      if self.ui.frameTargetCoordinatesSystemComboBox.currentText == 'XYZ':
+        frameTargetCoordinates = self.logic.transformCoordinateFromRASToXYZ(frameTargetCoordinates)
+      if self.ui.frameTargetCoordinatesSystemComboBox.currentText == 'XYZ':
+        frameEntryCoordinates = self.logic.transformCoordinateFromRASToXYZ(frameEntryCoordinates)
+
+      self._parameterNode.SetParameter("FrameTargetCoordinates", ','.join([str(x) for x in frameTargetCoordinates]))
+      self._parameterNode.SetParameter("FrameEntryCoordinates", ','.join([str(x) for x in frameEntryCoordinates]))
+
+    self._parameterNode.EndModify(wasModified)
+
+    if int(self._parameterNode.GetParameter("AutoUpdate")):
+      self.onApplyButton()
+
+  def frameTargetCoordinatesSytemChanged(self, system):
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+    frameTargetCoordinates = np.array(self.ui.frameTargetCoordinates.coordinates.split(','), dtype=float)
+    if system == 'XYZ':
+      frameTargetCoordinates = self.logic.transformCoordinateFromRASToXYZ(frameTargetCoordinates)
+    elif system == 'RAS':
+      frameTargetCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameTargetCoordinates)
+    self._parameterNode.SetParameter("FrameTargetCoordinatesSystem", system)
+    self._parameterNode.SetParameter("FrameTargetCoordinates", ','.join([str(x) for x in frameTargetCoordinates]))
+    self._parameterNode.EndModify(wasModified)
+    self.onFrameCoordinatesModified()
+
+  def frameEntryCoordinatesSytemChanged(self, system):
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+    frameEntryCoordinates = np.array(self.ui.frameEntryCoordinates.coordinates.split(','), dtype=float)
+    if system == 'XYZ':
+      frameEntryCoordinates = self.logic.transformCoordinateFromRASToXYZ(frameEntryCoordinates)
+    elif system == 'RAS':
+      frameEntryCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameEntryCoordinates)
+    self._parameterNode.SetParameter("FrameEntryCoordinatesSystem", system)
+    self._parameterNode.SetParameter("FrameEntryCoordinates", ','.join([str(x) for x in frameEntryCoordinates]))
+    self._parameterNode.EndModify(wasModified)
+    self.onFrameCoordinatesModified()
+
+
+  def importFromChanged(self, deviceName):
+    if deviceName=='Import From...':
+      return
+    
+    import StereotacticPlanLib.ImportFrom
+    importFromModule = StereotacticPlanLib.ImportFrom
+
+    import importlib
+    importlib.import_module('.'.join(['StereotacticPlanLib', 'ImportFrom', deviceName]))
+
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+
+    deviceModule = getattr(importFromModule, deviceName)
+    deviceModule.setParameterNodeFromDevice(self._parameterNode)
+
+    self._parameterNode.EndModify(wasModified)
+
+    self.ui.importFromComboBox.currentText = 'Import From...'
 
   def onSetDefaultResliceDriver(self):
     StereotacticPlanLib.util.setDefaultResliceDriver(self._parameterNode.GetNodeReferenceID("OutputTransform"))
@@ -305,19 +443,61 @@ class StereotacticPlanWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     if self._parameterNode.GetNodeReferenceID("PreviewLine"):
       self._parameterNode.GetNodeReference("PreviewLine").SetAndObserveTransformNodeID(node.GetID() if node else None)
 
+  def applyXYZToRASToggled(self, active):
+    fiducialNode = self.ui.frameACPCMSComboBox.currentNode()
+    if fiducialNode:
+      if active:
+        npMatrix = self.logic.getFrameXYZToRASTransform()
+        vtkMatrix = vtk.vtkMatrix4x4()
+        for i in range(4):
+          for j in range(4):
+            vtkMatrix.SetElement(i,j,npMatrix[i,j])
+        frameToRASNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLinearTransformNode')
+        frameToRASNode.SetMatrixTransformToParent(vtkMatrix)
+        fiducialNode.SetAndObserveTransformNodeID(frameToRASNode.GetID())
+      else:
+        currentTransform = fiducialNode.GetTransformNodeID()
+        fiducialNode.SetAndObserveTransformNodeID(None)
+        if currentTransform:
+          slicer.mrmlScene.RemoveNode(slicer.util.getNode(currentTransform))
+
+  def onCalculateReferenceToFrameTransform(self):
+    referenceACPCMSNode = self.ui.referenceACPCMSComboBox.currentNode()
+    frameACPCMSNode = self.ui.frameACPCMSComboBox.currentNode()
+    if frameACPCMSNode is not None:
+      self.logic.runFiducialRegistration(self.ui.referenceToFrameTransformComboBox.currentNode(),
+                          referenceACPCMSNode,
+                          frameACPCMSNode)
+    else:
+      self.logic.runACPCAlignment(self.ui.referenceToFrameTransformComboBox.currentNode(),
+                          referenceACPCMSNode)
 
   def onApplyButton(self):
     """
     Run processing when user clicks "Apply" button.
     """
+    frameTargetCoordinates = np.array(self.ui.frameTargetCoordinates.coordinates.split(','), dtype=float)
+    if self.ui.frameTargetCoordinatesSystemComboBox.currentText == 'XYZ':
+      frameTargetCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameTargetCoordinates)
+  
+    frameEntryCoordinates = np.array(self.ui.frameEntryCoordinates.coordinates.split(','), dtype=float)
+    if self.ui.frameEntryCoordinatesSystemComboBox.currentText == 'XYZ':
+      frameEntryCoordinates = self.logic.transformCoordinateFromXYZToRAS(frameEntryCoordinates)
+
     try:
 
-      # Compute output
-      self.logic.process(self.ui.outputSelector.currentNode(),
-                         self.ui.arcAngleSliderWidget.value,
-                         self.ui.ringAngleSliderWidget.value,
-                         np.array(self.ui.headringCoordinatesWidget.coordinates.split(','), dtype=float),
-                         self.ui.mountingComboBox.currentText)
+      if self.ui.targetMountingRingArcRadioButton.checked:
+        self.logic.computeFromTargetMountingRingArc(self.ui.outputSelector.currentNode(),
+                          frameTargetCoordinates,
+                          self.ui.mountingComboBox.currentText,
+                          self.ui.ringAngleSliderWidget.value,
+                          self.ui.arcAngleSliderWidget.value)
+      else:
+        self.logic.computeFromTargetEntryRoll(self.ui.outputSelector.currentNode(),
+                          frameTargetCoordinates,
+                          frameEntryCoordinates,
+                          self.ui.rollAngleSliderWidget.value)
+
 
     except Exception as e:
       slicer.util.errorDisplay("Failed to compute transform: "+str(e))
@@ -345,6 +525,22 @@ class StereotacticPlanLogic(ScriptedLoadableModuleLogic):
     """
     ScriptedLoadableModuleLogic.__init__(self)
 
+    if slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool):
+      import glob
+      import importlib
+      import StereotacticPlanLib
+      StereotacticPlanLibPath = os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib')
+      G = glob.glob(os.path.join(StereotacticPlanLibPath, '**','*.py'))
+      for g in G:
+        relativePath = os.path.relpath(g, StereotacticPlanLibPath) # relative path
+        relativePath = os.path.splitext(relativePath)[0] # get rid of .py
+        moduleParts = relativePath.split(os.path.sep) # separate
+        importlib.import_module('.'.join(['StereotacticPlanLib']+moduleParts)) # import module
+        module = StereotacticPlanLib
+        for modulePart in moduleParts: # iterate over parts in order to load subpkgs
+          module = getattr(module, modulePart)
+        importlib.reload(module) # reload
+
   def setDefaultParameters(self, parameterNode):
     """
     Initialize parameter node with default settings.
@@ -353,14 +549,58 @@ class StereotacticPlanLogic(ScriptedLoadableModuleLogic):
       parameterNode.SetParameter("ArcAngle", "90.0")
     if not parameterNode.GetParameter("RingAngle"):
       parameterNode.SetParameter("RingAngle", "90.0")
-    if not parameterNode.GetParameter("HeadringCoordinates"):
-      parameterNode.SetParameter("HeadringCoordinates", "100.0,100.0,100.0")
+    if not parameterNode.GetParameter("RollAngle"):
+      parameterNode.SetParameter("RollAngle", "0.0")
+    if not parameterNode.GetParameter("FrameTargetCoordinates"):
+      parameterNode.SetParameter("FrameTargetCoordinates", "100.0,100.0,100.0")
+    if not parameterNode.GetParameter("FrameEntryCoordinates"):
+      parameterNode.SetParameter("FrameEntryCoordinates", "100.0,100.0,50.0")
+    if not parameterNode.GetParameter("ApplyXYZToRAS"):
+      parameterNode.SetParameter("ApplyXYZToRAS", "0")
+    if not parameterNode.GetParameter("FrameEntryCoordinatesSystem"):
+      parameterNode.SetParameter("FrameEntryCoordinatesSystem", "XYZ")
+    if not parameterNode.GetParameter("FrameTargetCoordinatesSystem"):
+      parameterNode.SetParameter("FrameTargetCoordinatesSystem", "XYZ")
     if not parameterNode.GetParameter("Mounting"):
       parameterNode.SetParameter("Mounting", "lateral-left")
     if not parameterNode.GetParameter("AutoUpdate"):
       parameterNode.SetParameter("AutoUpdate", "0")
 
-  def process(self, outputTransform, arcAngle, ringAngle, headringCoordinates, mounting):
+  def runFiducialRegistration(self, outputTransform, sourceFiducials, targetFiducials):
+    # use aux node with World coordinates
+    auxFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+    auxFidNode.GetDisplayNode().SetVisibility(False)
+    auxFidNode.AddControlPointWorld(targetFiducials.GetNthControlPointPositionWorld(0))
+    auxFidNode.AddControlPointWorld(targetFiducials.GetNthControlPointPositionWorld(1))
+    auxFidNode.AddControlPointWorld(targetFiducials.GetNthControlPointPositionWorld(2))
+
+    parameters = {}
+    parameters['fixedLandmarks']  = auxFidNode.GetID()
+    parameters['movingLandmarks'] = sourceFiducials.GetID()
+    parameters['saveTransform']   = outputTransform.GetID()
+    parameters['transformType']   = 'Rigid'
+    slicer.cli.run(slicer.modules.fiducialregistration, None, parameters, wait_for_completion=True, update_display=False)
+
+    slicer.mrmlScene.RemoveNode(auxFidNode)
+
+
+  def runACPCAlignment(self, outputTransform, ACPCMSNode):
+    auxLineNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsLineNode')
+    auxLineNode.GetDisplayNode().SetVisibility(False)
+    auxLineNode.AddControlPointWorld(ACPCMSNode.GetNthControlPointPositionWorld(0), 'AC')
+    auxLineNode.AddControlPointWorld(ACPCMSNode.GetNthControlPointPositionWorld(1), 'PC')
+
+    parameters = {}
+    parameters['ACPC']  = auxLineNode.GetID()
+    parameters['Midline'] = ACPCMSNode.GetID()
+    parameters['centerVolume'] = True 
+    parameters['OutputTransform'] = outputTransform.GetID()
+    slicer.cli.run(slicer.modules.acpctransform, None, parameters, wait_for_completion=True, update_display=False)
+
+    slicer.mrmlScene.RemoveNode(auxLineNode)
+
+
+  def computeFromTargetMountingRingArc(self, outputTransform, frameTargetCoordinates, mounting, ringAngle, arcAngle):
     """
     Run the processing algorithm.
     Can be used without GUI widget.
@@ -368,14 +608,6 @@ class StereotacticPlanLogic(ScriptedLoadableModuleLogic):
 
     if not outputTransform:
       raise ValueError("output transform is invalid")
-
-    # Headring coordinates to Slicer world (matching center)
-    headringToRAS = np.array([[ -1,  0,  0,  100],
-                              [  0,  1,  0, -100],
-                              [  0,  0, -1,  100],
-                              [  0,  0,  0,    1]])
-    
-    headringCoordinatesRAS = np.dot(headringToRAS, np.append(headringCoordinates, 1))[:3]
 
     # Get ring and arc directions
     if mounting == 'lateral-right':
@@ -397,13 +629,49 @@ class StereotacticPlanLogic(ScriptedLoadableModuleLogic):
 
     # Create vtk Transform
     vtkTransform = vtk.vtkTransform()
-    vtkTransform.Translate(headringCoordinatesRAS)
+    vtkTransform.Translate(frameTargetCoordinates)
     vtkTransform.RotateWXYZ(arcAngle, arcDirection[0], arcDirection[1], arcDirection[2])
     vtkTransform.RotateWXYZ(ringAngle, ringDirection[0], ringDirection[1], ringDirection[2])
     vtkTransform.RotateWXYZ(90, initDirection[0], initDirection[1], initDirection[2])
 
     # Set to node
     outputTransform.SetAndObserveTransformToParent(vtkTransform)
+
+  def computeFromTargetEntryRoll(self, outputTransform, frameTargetCoordinates, frameEntryCoordinates, rollAngle):
+
+    entryTargetDirection = frameEntryCoordinates - frameTargetCoordinates
+    vtk.vtkMath().Normalize(entryTargetDirection)
+    superiorInferiorDirection = np.array([0,0,1])
+
+    ang_rad = np.arccos(vtk.vtkMath().Dot(entryTargetDirection, superiorInferiorDirection))
+    ang_deg = np.rad2deg(ang_rad)
+
+    cross = np.zeros(3)
+    vtk.vtkMath().Cross(entryTargetDirection, superiorInferiorDirection, cross)
+
+    if vtk.vtkMath().Dot(cross,superiorInferiorDirection) >= 0:
+      ang_deg = -1 * ang_deg
+    
+    vtkTransform = vtk.vtkTransform()
+    vtkTransform.Translate(frameTargetCoordinates)
+    vtkTransform.RotateWXYZ(rollAngle, entryTargetDirection[0], entryTargetDirection[1], entryTargetDirection[2])
+    vtkTransform.RotateWXYZ(ang_deg, cross[0], cross[1], cross[2])
+
+    outputTransform.SetAndObserveTransformToParent(vtkTransform)
+
+  def transformCoordinateFromXYZToRAS(self, coord):
+    return np.dot(self.getFrameXYZToRASTransform(), np.append(coord, 1))[:3]
+
+  def transformCoordinateFromRASToXYZ(self, coord):
+    return np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(coord, 1))[:3]
+
+  def getFrameXYZToRASTransform(self):
+    # Headring coordinates to Slicer world (matching center)
+    frameToRAS = np.array([[ -1,  0,  0,  100],
+                           [  0,  1,  0, -100],
+                           [  0,  0, -1,  100],
+                           [  0,  0,  0,    1]])
+    return frameToRAS                       
 
 #
 # StereotacticPlanTest
@@ -441,36 +709,15 @@ class StereotacticPlanTest(ScriptedLoadableModuleTest):
 
     self.delayDisplay("Starting the test")
 
-    # TODO
-
-    # Get/create input data
-
-    # import SampleData
-    # registerSampleData()
-    # inputVolume = SampleData.downloadSample('StereotacticPlan1')
-    # self.delayDisplay('Loaded test data set')
-
-    # inputScalarRange = inputVolume.GetImageData().GetScalarRange()
-    # self.assertEqual(inputScalarRange[0], 0)
-    # self.assertEqual(inputScalarRange[1], 695)
-
-    # OutputTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
-    # threshold = 100
-
-    # # Test the module logic
-
-    # logic = StereotacticPlanLogic()
-
-    # # Test algorithm with non-inverted threshold
-    # logic.process(inputVolume, OutputTransform, threshold, True)
-    # outputScalarRange = OutputTransform.GetImageData().GetScalarRange()
-    # self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-    # self.assertEqual(outputScalarRange[1], threshold)
-
-    # # Test algorithm with inverted threshold
-    # logic.process(inputVolume, OutputTransform, threshold, False)
-    # outputScalarRange = OutputTransform.GetImageData().GetScalarRange()
-    # self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-    # self.assertEqual(outputScalarRange[1], inputScalarRange[1])
+    # frame fiducials
+    frameFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','FrameFid')
+    frameFidNode.AddFiducialFromArray([100.2, 127.55, 123.66], 'frameAC')
+    frameFidNode.AddFiducialFromArray([99.93, 102.57, 123.74], 'framePC')
+    frameFidNode.AddFiducialFromArray([96.94, 102.37, 53.81], 'frameMS')
+    # reference fiducials
+    referenceFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','ReferenceFid')
+    referenceFidNode.AddFiducialFromArray([-0.47, 5.1, -39.01], 'referenceAC')
+    referenceFidNode.AddFiducialFromArray([1.03, -17.39, -49.78], 'referencePC')
+    referenceFidNode.AddFiducialFromArray([7.36, -47.16, 13.25], 'referenceMS')
 
     self.delayDisplay('Test passed')
