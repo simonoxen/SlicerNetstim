@@ -10,7 +10,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
 import StereotacticPlanLib.util
-
+from StereotacticPlanLib.Widgets.CustomWidgets import myCoordinatesWidget
 
 #
 # StereotacticPlan2
@@ -125,8 +125,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Custom Widgets
         self.updateTrajectoriesComboBox()
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Entry:', qt.QPushButton())
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Target:', qt.QPushButton())
+        self.ui.trajectoriesCollapsibleButton.layout().addRow('Entry:', myCoordinatesWidget())
+        self.ui.trajectoriesCollapsibleButton.layout().addRow('Target:', myCoordinatesWidget())
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -378,6 +378,23 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         Called when the logic class is instantiated. Can be used for initializing member variables.
         """
         ScriptedLoadableModuleLogic.__init__(self)
+
+    if slicer.util.settingsValue('Developer/DeveloperMode', False, converter=slicer.util.toBool):
+      import glob
+      import importlib
+      import StereotacticPlanLib
+      StereotacticPlanLibPath = os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib')
+      G = glob.glob(os.path.join(StereotacticPlanLibPath, '**','*.py'))
+      for g in G:
+        relativePath = os.path.relpath(g, StereotacticPlanLibPath) # relative path
+        relativePath = os.path.splitext(relativePath)[0] # get rid of .py
+        moduleParts = relativePath.split(os.path.sep) # separate
+        importlib.import_module('.'.join(['StereotacticPlanLib']+moduleParts)) # import module
+        module = StereotacticPlanLib
+        for modulePart in moduleParts: # iterate over parts in order to load subpkgs
+          module = getattr(module, modulePart)
+        importlib.reload(module) # reload
+
 
     def setDefaultParameters(self, parameterNode):
         """
