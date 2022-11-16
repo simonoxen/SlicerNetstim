@@ -125,8 +125,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Custom Widgets
         self.updateTrajectoriesComboBox()
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Entry:', myCoordinatesWidget())
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Target:', myCoordinatesWidget())
+        auxMarkupsNode = self.getOrCreateAuxMarkupsNode()
+        auxMarkupsNode.RemoveAllControlPoints()
+        self.ui.trajectoriesCollapsibleButton.layout().addRow('Entry:', myCoordinatesWidget(auxMarkupsNode, 'Entry'))
+        self.ui.trajectoriesCollapsibleButton.layout().addRow('Target:', myCoordinatesWidget(auxMarkupsNode, 'Target'))
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -157,6 +159,16 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
+
+    def getOrCreateAuxMarkupsNode(self):
+        shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
+        for i in range(slicer.mrmlScene.GetNumberOfNodesByClass('vtkMRMLMarkupsFiducialNode')):
+            auxMarkupsNode = slicer.mrmlScene.GetNthNodeByClass(i, 'vtkMRMLMarkupsFiducialNode')
+            if 'StereotacticPlan' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(auxMarkupsNode)):
+                return auxMarkupsNode
+        auxMarkupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', 'SterotacticPlanMarkupsNode')
+        shNode.SetItemAttribute(shNode.GetItemByDataNode(auxMarkupsNode), 'StereotacticPlan', '1')
+        return auxMarkupsNode
 
     def cleanup(self):
         """
