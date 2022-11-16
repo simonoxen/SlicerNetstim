@@ -8,13 +8,6 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
     def __init__(self):
         super().__init__()
 
-        self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
-        self.markupsNode.GetDisplayNode().SetTextScale(0)
-        self.markupsNode.GetDisplayNode().SetVisibility(0)
-        self.markupsNode.AddControlPoint(0,0,0,'')
-
-        self.coordinatesChanged.connect(self.onCoordinatesChanged)
-
         systemComboBox = qt.QComboBox(self)
         systemComboBox.addItems(['RAS', 'XYZ'])
         systemComboBox.connect('currentTextChanged(QString)', self.onSystemChanged)
@@ -33,15 +26,32 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         placeAction = qt.QAction(self)
         placeAction.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
         placeAction.setCheckable(True)
-        placeAction.connect("triggered(bool)", self.onPlaceClicked)
+        placeAction.connect("toggled(bool)", self.onPlaceClicked)
         placeButton = qt.QToolButton(self)
         placeButton.setDefaultAction(placeAction)
         placeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
         placeButton.setFixedHeight(systemComboBox.height)
         self.layout().addWidget(placeButton)
 
-    def onCoordinatesChanged(self):
-        self.markupsNode.SetNthControlPointPositionFromArray(0, self.getNumpyCoordinates())
+        self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+        self.markupsNode.GetDisplayNode().SetTextScale(0)
+        self.markupsNode.GetDisplayNode().SetVisibility(0)
+        self.markupsNode.AddControlPoint(0,0,0,'')
+        self.markupsNode.AddObserver(self.markupsNode.PointModifiedEvent, self.updateCoordinatesFromMarkupsNode)
+        self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=placeAction: pa.setChecked(False))
+
+        self.coordinatesChanged.connect(self.updateMarkupsNodeFromCoordinates)
+
+        self._updatingCoordinatesFromMarkups = False
+
+    def updateCoordinatesFromMarkupsNode(self, caller, event):
+        pos = np.zeros(3)
+        self.markupsNode.GetNthControlPointPosition(0,pos)
+        self.setNumpyCoordinates(pos)
+
+    def updateMarkupsNodeFromCoordinates(self):
+        if not self._updatingCoordinatesFromMarkups:
+            self.markupsNode.SetNthControlPointPositionFromArray(0, self.getNumpyCoordinates())
 
     def onSystemChanged(self, system):
         if system == 'RAS':
@@ -72,8 +82,12 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def onPlaceClicked(self, active):
         if active:
+            self._updatingCoordinatesFromMarkups = True
+            self.markupsNode.ResetNthControlPointPosition(0)
             interactionNode = slicer.app.applicationLogic().GetInteractionNode()
             selectionNode = slicer.app.applicationLogic().GetSelectionNode()
             selectionNode.SetReferenceActivePlaceNodeClassName("vtkMRMLMarkupsFiducialNode")
             selectionNode.SetActivePlaceNodeID(self.markupsNode.GetID())
             interactionNode.SetCurrentInteractionMode(interactionNode.Place)
+        else:
+            self._updatingCoordinatesFromMarkups = False
