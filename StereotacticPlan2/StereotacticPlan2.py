@@ -246,6 +246,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
     def trajectoryChanged(self, currentText):
         if currentText == 'Select...':
+            self._parameterNode.SetParameter("TrajectoryIndex", "")
             return
         elif currentText == 'Create new trajectory as':
             self.createNewTrajectory()
@@ -266,7 +267,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if not trajectoryName:
             return
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectories.append({k:'0,0,0' for k in self.coordinateWidgets.keys()})
+        trajectories.append({k:'0,0,0;RAS' for k in self.coordinateWidgets.keys()})
         trajectories[-1]['Name'] = trajectoryName
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
@@ -314,12 +315,19 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self.updateTrajectoriesComboBox([trajectory['Name'] for trajectory in trajectories])
 
-        if trajectories and trajectoryIndex:
+        currentTrajectoryAvailable = trajectories and trajectoryIndex
+
+        if currentTrajectoryAvailable:
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
-            self.updateCoordinatesFromTrajectory(currentTrajectory)
+            self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
         else:
             self.ui.trajectoryComboBox.setCurrentText('Select...')
+
+        for widget in self.coordinateWidgets.values():
+            if not currentTrajectoryAvailable:
+                widget.reset()
+            widget.setEnabled(currentTrajectoryAvailable)
 
 
         # # Update node selectors and sliders
@@ -356,7 +364,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         if trajectories and trajectoryIndex:
             currentTrajectory = trajectories[int(trajectoryIndex)]
-            self.updateTrajectoryFromCoordinates(currentTrajectory)
+            self.updateTrajectoryFromCoordinatesWidget(currentTrajectory)
 
         # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
         # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
@@ -369,13 +377,15 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self._parameterNode.EndModify(wasModified)
 
 
-    def updateCoordinatesFromTrajectory(self, trajectory):
+    def updateCoordinatesWidgetFromTrajectory(self, trajectory):
         for name, widget in self.coordinateWidgets.items():
-            widget.coordinates = trajectory[name]
+            coords, system = trajectory[name].split(';')
+            widget.setSystem(system)
+            widget.coordinates = coords
 
-    def updateTrajectoryFromCoordinates(self, trajectory):
+    def updateTrajectoryFromCoordinatesWidget(self, trajectory):
         for name, widget in self.coordinateWidgets.items():
-             trajectory[name] = widget.coordinates
+             trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
 
     def onApplyButton(self):
         """

@@ -23,21 +23,21 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         viewAction.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
         viewAction.setCheckable(True)
         viewAction.connect("triggered(bool)", self.onViewClicked)
-        viewButton = qt.QToolButton(self)
-        viewButton.setDefaultAction(viewAction)
-        viewButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
-        viewButton.setFixedSize(buttonSize, buttonSize)
-        self.layout().addWidget(viewButton)
+        self.viewButton = qt.QToolButton(self)
+        self.viewButton.setDefaultAction(viewAction)
+        self.viewButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
+        self.viewButton.setFixedSize(buttonSize, buttonSize)
+        self.layout().addWidget(self.viewButton)
 
         placeAction = qt.QAction(self)
         placeAction.setIcon(qt.QIcon(":/Icons/MarkupsFiducialMouseModePlace.png"))
         placeAction.setCheckable(True)
         placeAction.connect("toggled(bool)", self.onPlaceToggled)
-        placeButton = qt.QToolButton(self)
-        placeButton.setDefaultAction(placeAction)
-        placeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
-        placeButton.setFixedSize(buttonSize, buttonSize)
-        self.layout().addWidget(placeButton)
+        self.placeButton = qt.QToolButton(self)
+        self.placeButton.setDefaultAction(placeAction)
+        self.placeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
+        self.placeButton.setFixedSize(buttonSize, buttonSize)
+        self.layout().addWidget(self.placeButton)
 
         self.markupsNode = auxMarkupsNode
         self.markupsNode.AddControlPoint(0, 0, 0, name)
@@ -50,6 +50,15 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
         self.coordinatesChanged.connect(self.updateMarkupsNodeFromCoordinates)
 
+    def reset(self):
+        self.setSystem('RAS')
+        self.coordinates = '0,0,0'
+
+    def setSystem(self, system):
+        self.systemComboBox.currentText = system
+    
+    def getSystem(self):
+        return self.systemComboBox.currentText
 
     def updateCoordinatesFromMarkupsNode(self, caller, event):
         if self._updatingMarkupsFromCoordinates:
