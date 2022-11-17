@@ -39,12 +39,12 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
         self.markupsNode = auxMarkupsNode
         self.markupsNode.AddControlPoint(0, 0, 0, name)
-        self.markupsNode.AddObserver(self.markupsNode.PointModifiedEvent, self.updateCoordinatesFromMarkupsNode)
-        self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=placeAction: pa.setChecked(False))
-
         self.markupsNodeControlPointIndex = self.markupsNode.GetNumberOfControlPoints()-1
         self.markupsNode.SetNthControlPointVisibility(self.markupsNodeControlPointIndex, False)
         self.markupsNode.SetNthControlPointLocked(self.markupsNodeControlPointIndex, True)
+
+        self.markupsNode.AddObserver(self.markupsNode.PointModifiedEvent, self.updateCoordinatesFromMarkupsNode)
+        self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=placeAction: pa.setChecked(False))
 
         self.coordinatesChanged.connect(self.updateMarkupsNodeFromCoordinates)
 
@@ -52,9 +52,11 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
     def updateCoordinatesFromMarkupsNode(self, caller, event):
         if self._updatingMarkupsFromCoordinates:
             return
-        pos = np.zeros(3)
-        self.markupsNode.GetNthControlPointPosition(self.markupsNodeControlPointIndex, pos)
-        self.setNumpyCoordinates(pos)
+        coords = np.zeros(3)
+        self.markupsNode.GetNthControlPointPosition(self.markupsNodeControlPointIndex, coords)
+        if self.systemComboBox.currentText == 'XYZ':
+            coords = self.transformCoordsFromRASToXYZ(coords)
+        self.setNumpyCoordinates(coords)
 
     def updateMarkupsNodeFromCoordinates(self):
         if self._updatingCoordinatesFromMarkups:
@@ -62,15 +64,15 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self._updatingMarkupsFromCoordinates = True
         coords = self.getNumpyCoordinates()
         if self.systemComboBox.currentText == 'XYZ':
-            coords = np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
-        self.markupsNode.SetNthControlPointPositionFromArray(0, coords)
+            coords = self.transformCoordsFromXYZToRAS(coords)
+        self.markupsNode.SetNthControlPointPosition(self.markupsNodeControlPointIndex, coords)
         self._updatingMarkupsFromCoordinates = False
 
     def onSystemChanged(self, system):
         if system == 'RAS':
-            coords =  np.dot(self.getFrameXYZToRASTransform(), np.append(self.getNumpyCoordinates(), 1))[:3]
+            coords =  self.transformCoordsFromXYZToRAS(self.getNumpyCoordinates())
         elif system == 'XYZ':
-            coords = np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(self.getNumpyCoordinates(), 1))[:3]
+            coords = self.transformCoordsFromRASToXYZ(self.getNumpyCoordinates())
         self.setNumpyCoordinates(coords)
 
     def getNumpyCoordinates(self):
@@ -78,6 +80,12 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def setNumpyCoordinates(self, coords):
         self.coordinates = ','.join([str(x) for x in coords])
+
+    def transformCoordsFromXYZToRAS(self, coords):
+        return  np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
+
+    def transformCoordsFromRASToXYZ(self, coords):
+        return np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(coords, 1))[:3]
 
     def getFrameXYZToRASTransform(self):
         # Headring coordinates to Slicer world (matching center)
@@ -109,3 +117,4 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
             self.markupsNode.SetNthControlPointLocked(self.markupsNodeControlPointIndex, True)
             self._updatingCoordinatesFromMarkups = False
             self.systemComboBox.currentText = 'XYZ' if self._wasXYZ else 'RAS'
+
