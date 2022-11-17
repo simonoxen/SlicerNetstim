@@ -17,24 +17,28 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.systemComboBox.connect('currentTextChanged(QString)', self.onSystemChanged)
         self.layout().addWidget(self.systemComboBox)
 
+        buttonSize = self.systemComboBox.height * 0.75
+
         viewAction = qt.QAction(self)
-        viewAction.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
         viewAction.setCheckable(True)
         viewAction.connect("triggered(bool)", self.onViewClicked)
         viewButton = qt.QToolButton(self)
         viewButton.setDefaultAction(viewAction)
         viewButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
-        viewButton.setFixedHeight(self.systemComboBox.height)
+        viewButton.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
+        viewButton.setFixedSize(buttonSize, buttonSize)
+        viewButton.setIconSize(qt.QSize(buttonSize, buttonSize))
         self.layout().addWidget(viewButton)
 
         placeAction = qt.QAction(self)
-        placeAction.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
         placeAction.setCheckable(True)
         placeAction.connect("toggled(bool)", self.onPlaceToggled)
         placeButton = qt.QToolButton(self)
         placeButton.setDefaultAction(placeAction)
         placeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
-        placeButton.setFixedHeight(self.systemComboBox.height)
+        placeButton.setIcon(qt.QIcon(":/Icons/MarkupsFiducialMouseModePlace.png"))
+        placeButton.setFixedSize(buttonSize, buttonSize)
+        placeButton.setIconSize(qt.QSize(buttonSize, buttonSize))
         self.layout().addWidget(placeButton)
 
         self.markupsNode = auxMarkupsNode
