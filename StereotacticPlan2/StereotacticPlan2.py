@@ -127,8 +127,11 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.updateTrajectoriesComboBox()
         auxMarkupsNode = self.getOrCreateAuxMarkupsNode()
         auxMarkupsNode.RemoveAllControlPoints()
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Entry:', myCoordinatesWidget(auxMarkupsNode, 'Entry'))
-        self.ui.trajectoriesCollapsibleButton.layout().addRow('Target:', myCoordinatesWidget(auxMarkupsNode, 'Target'))
+        self.coordinateWidgets = {}
+        for name in ['Entry', 'Target']:
+            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.coordinateWidgets[name])
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -263,7 +266,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if not trajectoryName:
             return
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectories.append({'Name': trajectoryName})
+        trajectories.append({k:'0,0,0' for k in self.coordinateWidgets.keys()})
+        trajectories[-1]['Name'] = trajectoryName
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
@@ -313,6 +317,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if trajectories and trajectoryIndex:
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
+            self.updateCoordinatesFromTrajectory(currentTrajectory)
         else:
             self.ui.trajectoryComboBox.setCurrentText('Select...')
 
@@ -346,13 +351,31 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
-        self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
-        self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
-        self._parameterNode.SetParameter("Threshold", str(self.ui.imageThresholdSliderWidget.value))
-        self._parameterNode.SetParameter("Invert", "true" if self.ui.invertOutputCheckBox.checked else "false")
-        self._parameterNode.SetNodeReferenceID("OutputVolumeInverse", self.ui.invertedOutputSelector.currentNodeID)
+        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
+        trajectoryIndex = self._parameterNode.GetParameter("TrajectoryIndex")
+
+        if trajectories and trajectoryIndex:
+            currentTrajectory = trajectories[int(trajectoryIndex)]
+            self.updateTrajectoryFromCoordinates(currentTrajectory)
+
+        # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
+        # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
+        # self._parameterNode.SetParameter("Threshold", str(self.ui.imageThresholdSliderWidget.value))
+        # self._parameterNode.SetParameter("Invert", "true" if self.ui.invertOutputCheckBox.checked else "false")
+        # self._parameterNode.SetNodeReferenceID("OutputVolumeInverse", self.ui.invertedOutputSelector.currentNodeID)
+
+        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
 
         self._parameterNode.EndModify(wasModified)
+
+
+    def updateCoordinatesFromTrajectory(self, trajectory):
+        for name, widget in self.coordinateWidgets.items():
+            widget.coordinates = trajectory[name]
+
+    def updateTrajectoryFromCoordinates(self, trajectory):
+        for name, widget in self.coordinateWidgets.items():
+             trajectory[name] = widget.coordinates
 
     def onApplyButton(self):
         """
