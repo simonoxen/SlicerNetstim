@@ -39,6 +39,17 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.placeButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.placeButton)
 
+        transformAction = qt.QAction(self)
+        transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
+        transformAction.setCheckable(True)
+        # transformAction.connect("toggled(bool)", self.onPlaceToggled)
+        self.transformButton = qt.QToolButton(self)
+        self.transformButton.setDefaultAction(transformAction)
+        self.transformButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
+        self.transformButton.setFixedSize(buttonSize, buttonSize)
+        self.layout().addWidget(self.transformButton)
+
+
         self.markupsNode = auxMarkupsNode
         self.markupsNode.AddControlPoint(0, 0, 0, name)
         self.markupsNodeControlPointIndex = self.markupsNode.GetNumberOfControlPoints()-1
