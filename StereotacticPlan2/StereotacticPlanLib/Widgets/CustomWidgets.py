@@ -86,8 +86,16 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
             coords = self.transformCoordsFromRASToXYZ(self.getNumpyCoordinates())
         self.setNumpyCoordinates(coords)
 
-    def getNumpyCoordinates(self):
-        return np.fromstring(self.coordinates, dtype=float, sep=',')
+    def getNumpyCoordinates(self, system=None):
+        coords = np.fromstring(self.coordinates, dtype=float, sep=',')
+        if (system is None) or (system == self.getSystem()):
+            return coords
+        elif system == 'RAS':
+            return self.transformCoordsFromXYZToRAS(coords)
+        elif system == 'XYZ':
+            return self.transformCoordsFromRASToXYZ(coords)
+        else:
+            raise RuntimeError('Unknown system: ' + system)
 
     def setNumpyCoordinates(self, coords):
         self.coordinates = ','.join([str(x) for x in coords])

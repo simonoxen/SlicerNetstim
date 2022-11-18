@@ -161,7 +161,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        # self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         # self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         # self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         # self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
@@ -169,6 +169,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Buttons
         self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
+        self.ui.calculateReferenceToFramePushButton.connect('clicked(bool)', self.onCalculateReferenceToFrame)
         # self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
 
         # Make sure parameter node is initialized (needed for module reload)
@@ -280,6 +281,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
         trajectories.append({k:'0,0,0;RAS' for k in self.coordinateWidgets.keys()})
         trajectories[-1]['Name'] = trajectoryName
+        trajectories[-1]['ReferenceToFrameTransform'] = ''
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
@@ -332,14 +334,18 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
             self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
+            transformNode = slicer.util.getNode(currentTrajectory['ReferenceToFrameTransform']) if currentTrajectory['ReferenceToFrameTransform'] != '' else None
+            self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(transformNode)
         else:
             self.ui.trajectoryComboBox.setCurrentText('Select...')
+            self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(None)
 
         for widget in self.coordinateWidgets.values():
             if not currentTrajectoryAvailable:
                 widget.reset()
             widget.setEnabled(currentTrajectoryAvailable)
 
+        self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
 
         # # Update node selectors and sliders
         # self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputVolume"))
@@ -376,6 +382,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if trajectories and trajectoryIndex:
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.updateTrajectoryFromCoordinatesWidget(currentTrajectory)
+            currentTrajectory["ReferenceToFrameTransform"] = self.ui.referenceToFrameTransformNodeComboBox.currentNodeID
 
         # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
         # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
@@ -397,6 +404,22 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
     def updateTrajectoryFromCoordinatesWidget(self, trajectory):
         for name, widget in self.coordinateWidgets.items():
              trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
+
+
+    def onCalculateReferenceToFrame(self):
+        if self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Align':
+            self.logic.runACPCAlignment(self.ui.referenceToFrameTransformNodeComboBox.currentNode(),
+                                        self.coordinateWidgets[ 'Reference AC'].getNumpyCoordinates(system='RAS'),
+                                        self.coordinateWidgets[ 'Reference PC'].getNumpyCoordinates(system='RAS'),
+                                        self.coordinateWidgets[ 'Reference MS'].getNumpyCoordinates(system='RAS'))
+
+        elif self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Register':
+            sourceCoordinates = [self.coordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Reference MS', 'Reference PC', 'Reference AC']]
+            targetCoordinates = [self.coordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Frame MS', 'Frame PC', 'Frame AC']]
+            self.logic.runFiducialRegistration(self.ui.referenceToFrameTransformNodeComboBox.currentNode(),
+                                                sourceCoordinates,
+                                                targetCoordinates)
+
 
     # def onApplyButton(self):
     #     """
@@ -496,6 +519,51 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
 
         stopTime = time.time()
         logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
+
+    def runFiducialRegistration(self, outputTransform, sourceCoords, targetCoords):
+        auxSourceNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+        auxSourceNode.GetDisplayNode().SetVisibility(False)
+        for coord in sourceCoords:
+            auxSourceNode.AddFiducialFromArray(coord)
+
+        auxTargetNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+        auxTargetNode.GetDisplayNode().SetVisibility(False)
+        for coord in targetCoords:
+            auxTargetNode.AddFiducialFromArray(coord)
+            
+        parameters = {}
+        parameters['fixedLandmarks']  = auxTargetNode.GetID()
+        parameters['movingLandmarks'] = auxSourceNode.GetID()
+        parameters['saveTransform']   = outputTransform.GetID()
+        parameters['transformType']   = 'Rigid'
+        slicer.cli.run(slicer.modules.fiducialregistration, None, parameters, wait_for_completion=True, update_display=False)
+
+        slicer.mrmlScene.RemoveNode(auxTargetNode)
+        slicer.mrmlScene.RemoveNode(auxSourceNode)
+
+
+    def runACPCAlignment(self, outputTransform, AC, PC, MS):
+
+        auxLineNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsLineNode')
+        auxLineNode.GetDisplayNode().SetVisibility(False)
+        auxLineNode.AddControlPointWorld(AC, 'AC')
+        auxLineNode.AddControlPointWorld(PC, 'PC')
+
+        ACPCMSNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
+        ACPCMSNode.GetDisplayNode().SetVisibility(False)
+        ACPCMSNode.AddFiducialFromArray(AC)
+        ACPCMSNode.AddFiducialFromArray(PC)
+        ACPCMSNode.AddFiducialFromArray(MS)
+
+        parameters = {}
+        parameters['ACPC']  = auxLineNode.GetID()
+        parameters['Midline'] = ACPCMSNode.GetID()
+        parameters['centerVolume'] = True 
+        parameters['OutputTransform'] = outputTransform.GetID()
+        slicer.cli.run(slicer.modules.acpctransform, None, parameters, wait_for_completion=True, update_display=False)
+
+        slicer.mrmlScene.RemoveNode(auxLineNode)
+        slicer.mrmlScene.RemoveNode(ACPCMSNode)
 
 
 #
