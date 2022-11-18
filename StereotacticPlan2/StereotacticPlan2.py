@@ -132,6 +132,17 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
             self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.coordinateWidgets[name])
+        for name in ['Reference MS', 'Reference PC', 'Reference AC']:
+            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.ui.referenceCollapsibleButton.layout().insertRow(1, name + ':', self.coordinateWidgets[name])
+        for name in ['Frame MS', 'Frame PC', 'Frame AC']:
+            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.coordinateWidgets[name].setVisible(False)
+            self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.coordinateWidgets[name])
+            self.ui.referenceToFrameCollapsibleButton.layout().labelForField(self.coordinateWidgets[name]).setVisible(False)
+            self.ui.referenceToFrameModeComboBox.currentTextChanged.connect(lambda t,w=self.coordinateWidgets[name]: [w.setVisible(t=='ACPC Register'), self.ui.referenceToFrameCollapsibleButton.layout().labelForField(w).setVisible(t=='ACPC Register')])
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -150,15 +161,15 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
-        self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
-        self.ui.invertedOutputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        # self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        # self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        # self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        # self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+        # self.ui.invertedOutputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
 
         # Buttons
         self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
-        self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+        # self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -218,10 +229,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.setParameterNode(self.logic.getParameterNode())
 
         # Select default input nodes if nothing is selected yet to save a few clicks for the user
-        if not self._parameterNode.GetNodeReference("InputVolume"):
-            firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
-            if firstVolumeNode:
-                self._parameterNode.SetNodeReferenceID("InputVolume", firstVolumeNode.GetID())
+        # if not self._parameterNode.GetNodeReference("InputVolume"):
+        #     firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
+        #     if firstVolumeNode:
+        #         self._parameterNode.SetNodeReferenceID("InputVolume", firstVolumeNode.GetID())
 
     def setParameterNode(self, inputParameterNode):
         """
@@ -387,21 +398,21 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         for name, widget in self.coordinateWidgets.items():
              trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
 
-    def onApplyButton(self):
-        """
-        Run processing when user clicks "Apply" button.
-        """
-        with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
+    # def onApplyButton(self):
+    #     """
+    #     Run processing when user clicks "Apply" button.
+    #     """
+    #     with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
 
-            # Compute output
-            self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-                               self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
+    #         # Compute output
+    #         self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
+    #                            self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
 
-            # Compute inverted output (if needed)
-            if self.ui.invertedOutputSelector.currentNode():
-                # If additional output volume is selected then result with inverted threshold is written there
-                self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-                                   self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
+    #         # Compute inverted output (if needed)
+    #         if self.ui.invertedOutputSelector.currentNode():
+    #             # If additional output volume is selected then result with inverted threshold is written there
+    #             self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
+    #                                self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
 
 
 #
