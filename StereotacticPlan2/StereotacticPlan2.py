@@ -127,22 +127,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.updateTrajectoriesComboBox()
         auxMarkupsNode = self.getOrCreateAuxMarkupsNode()
         auxMarkupsNode.RemoveAllControlPoints()
-        self.coordinateWidgets = {}
+        self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
-            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
-            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
-            self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.coordinateWidgets[name])
+            self.trajectoryCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.trajectoryCoordinateWidgets[name])
+        self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
-            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
-            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
-            self.ui.referenceCollapsibleButton.layout().insertRow(1, name + ':', self.coordinateWidgets[name])
+            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.referenceToFrameCoordinateWidgets[name])
         for name in ['Frame MS', 'Frame PC', 'Frame AC']:
-            self.coordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
-            self.coordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
-            self.coordinateWidgets[name].setVisible(False)
-            self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.coordinateWidgets[name])
-            self.ui.referenceToFrameCollapsibleButton.layout().labelForField(self.coordinateWidgets[name]).setVisible(False)
-            self.ui.referenceToFrameModeComboBox.currentTextChanged.connect(lambda t,w=self.coordinateWidgets[name]: [w.setVisible(t=='ACPC Register'), self.ui.referenceToFrameCollapsibleButton.layout().labelForField(w).setVisible(t=='ACPC Register')])
+            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.referenceToFrameCoordinateWidgets[name].setVisible(False)
+            self.ui.referenceToFrameCollapsibleButton.layout().insertRow(5, name + ':', self.referenceToFrameCoordinateWidgets[name])
+            self.ui.referenceToFrameCollapsibleButton.layout().labelForField(self.referenceToFrameCoordinateWidgets[name]).setVisible(False)
+            self.ui.referenceToFrameModeComboBox.currentTextChanged.connect(lambda t,w=self.referenceToFrameCoordinateWidgets[name]: [w.setVisible(t=='ACPC Register'), self.ui.referenceToFrameCollapsibleButton.layout().labelForField(w).setVisible(t=='ACPC Register')])
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -279,9 +280,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if not trajectoryName:
             return
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectories.append({k:'0,0,0;RAS' for k in self.coordinateWidgets.keys()})
+        trajectories.append({k:'0,0,0;RAS' for k in self.trajectoryCoordinateWidgets.keys()})
         trajectories[-1]['Name'] = trajectoryName
-        trajectories[-1]['ReferenceToFrameTransform'] = ''
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
@@ -334,18 +334,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
             self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
-            transformNode = slicer.util.getNode(currentTrajectory['ReferenceToFrameTransform']) if currentTrajectory['ReferenceToFrameTransform'] != '' else None
-            self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(transformNode)
         else:
             self.ui.trajectoryComboBox.setCurrentText('Select...')
             self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(None)
 
-        for widget in self.coordinateWidgets.values():
+        for widget in self.trajectoryCoordinateWidgets.values():
             if not currentTrajectoryAvailable:
                 widget.reset()
             widget.setEnabled(currentTrajectoryAvailable)
 
+        for name, widget in self.referenceToFrameCoordinateWidgets.items():
+            coords, system = self._parameterNode.GetParameter(name).split(';')
+            widget.setSystem(system)
+            widget.coordinates = coords
+
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
+        self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
+
 
         # # Update node selectors and sliders
         # self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputVolume"))
@@ -382,7 +387,12 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if trajectories and trajectoryIndex:
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.updateTrajectoryFromCoordinatesWidget(currentTrajectory)
-            currentTrajectory["ReferenceToFrameTransform"] = self.ui.referenceToFrameTransformNodeComboBox.currentNodeID
+
+        for name, widget in self.referenceToFrameCoordinateWidgets.items():
+            self._parameterNode.SetParameter(name, '%s;%s' % (widget.coordinates, widget.getSystem()) )
+
+        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
+        self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", self.ui.referenceToFrameTransformNodeComboBox.currentNodeID)
 
         # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
         # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
@@ -390,32 +400,31 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # self._parameterNode.SetParameter("Invert", "true" if self.ui.invertOutputCheckBox.checked else "false")
         # self._parameterNode.SetNodeReferenceID("OutputVolumeInverse", self.ui.invertedOutputSelector.currentNodeID)
 
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
 
         self._parameterNode.EndModify(wasModified)
 
 
     def updateCoordinatesWidgetFromTrajectory(self, trajectory):
-        for name, widget in self.coordinateWidgets.items():
+        for name, widget in self.trajectoryCoordinateWidgets.items():
             coords, system = trajectory[name].split(';')
             widget.setSystem(system)
             widget.coordinates = coords
 
     def updateTrajectoryFromCoordinatesWidget(self, trajectory):
-        for name, widget in self.coordinateWidgets.items():
+        for name, widget in self.trajectoryCoordinateWidgets.items():
              trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
 
 
     def onCalculateReferenceToFrame(self):
         if self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Align':
             self.logic.runACPCAlignment(self.ui.referenceToFrameTransformNodeComboBox.currentNode(),
-                                        self.coordinateWidgets[ 'Reference AC'].getNumpyCoordinates(system='RAS'),
-                                        self.coordinateWidgets[ 'Reference PC'].getNumpyCoordinates(system='RAS'),
-                                        self.coordinateWidgets[ 'Reference MS'].getNumpyCoordinates(system='RAS'))
+                                        self.referenceToFrameCoordinateWidgets['Reference AC'].getNumpyCoordinates(system='RAS'),
+                                        self.referenceToFrameCoordinateWidgets['Reference PC'].getNumpyCoordinates(system='RAS'),
+                                        self.referenceToFrameCoordinateWidgets['Reference MS'].getNumpyCoordinates(system='RAS'))
 
         elif self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Register':
-            sourceCoordinates = [self.coordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Reference MS', 'Reference PC', 'Reference AC']]
-            targetCoordinates = [self.coordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Frame MS', 'Frame PC', 'Frame AC']]
+            sourceCoordinates = [self.referenceToFrameCoordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Reference MS', 'Reference PC', 'Reference AC']]
+            targetCoordinates = [self.referenceToFrameCoordinateWidgets[name].getNumpyCoordinates(system='RAS') for name in ['Frame MS', 'Frame PC', 'Frame AC']]
             self.logic.runFiducialRegistration(self.ui.referenceToFrameTransformNodeComboBox.currentNode(),
                                                 sourceCoordinates,
                                                 targetCoordinates)
@@ -479,10 +488,9 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         """
         Initialize parameter node with default settings.
         """
-        if not parameterNode.GetParameter("Threshold"):
-            parameterNode.SetParameter("Threshold", "100.0")
-        if not parameterNode.GetParameter("Invert"):
-            parameterNode.SetParameter("Invert", "false")
+        for name in ["Reference AC", "Reference PC", "Reference MS", "Frame AC", "Frame PC", "Frame MS"]:
+            if not parameterNode.GetParameter(name):
+                parameterNode.SetParameter(name, "0,0,0;RAS")           
         if not parameterNode.GetParameter("Trajectories"):
             parameterNode.SetParameter("Trajectories", json.dumps([]))
         if not parameterNode.GetParameter("TrajectoryIndex"):

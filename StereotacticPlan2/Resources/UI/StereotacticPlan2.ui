@@ -6,46 +6,68 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>370</width>
-    <height>474</height>
+    <width>582</width>
+    <height>744</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="ctkCollapsibleButton" name="trajectoriesCollapsibleButton">
+    <widget class="ctkCollapsibleButton" name="referenceToFrameCollapsibleButton">
      <property name="text">
-      <string>Trajectories</string>
+      <string>Reference to frame</string>
      </property>
-     <layout class="QFormLayout" name="formLayout">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_6">
+     <layout class="QFormLayout" name="formLayout_2">
+      <item row="1" column="0">
+       <widget class="QLabel" name="label">
         <property name="text">
-         <string>Trajectory:</string>
+         <string>Mode: </string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QComboBox" name="trajectoryComboBox"/>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="referenceToFrameModeComboBox">
+        <item>
+         <property name="text">
+          <string>ACPC Align</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ACPC Register</string>
+         </property>
+        </item>
+       </widget>
       </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleButton" name="referenceCollapsibleButton">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="text">
-      <string>Reference</string>
-     </property>
-     <layout class="QFormLayout" name="formLayout_3">
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Output Transform: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="qMRMLNodeComboBox" name="referenceToFrameTransformNodeComboBox">
+        <property name="nodeTypes">
+         <stringlist>
+          <string>vtkMRMLLinearTransformNode</string>
+         </stringlist>
+        </property>
+        <property name="editEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QPushButton" name="calculateReferenceToFramePushButton">
+        <property name="text">
+         <string>Calculate</string>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label_7">
         <property name="text">
-         <string>Volume: </string>
+         <string>Reference Volume: </string>
         </property>
        </widget>
       </item>
@@ -62,57 +84,20 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="referenceToFrameCollapsibleButton">
+    <widget class="ctkCollapsibleButton" name="trajectoriesCollapsibleButton">
      <property name="text">
-      <string>Reference to frame</string>
+      <string>Trajectories</string>
      </property>
-     <layout class="QFormLayout" name="formLayout_2">
+     <layout class="QFormLayout" name="formLayout">
       <item row="0" column="0">
-       <widget class="QLabel" name="label">
+       <widget class="QLabel" name="label_6">
         <property name="text">
-         <string>Mode: </string>
+         <string>Trajectory:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="referenceToFrameModeComboBox">
-        <item>
-         <property name="text">
-          <string>ACPC Align</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>ACPC Register</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Transform: </string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="qMRMLNodeComboBox" name="referenceToFrameTransformNodeComboBox">
-        <property name="nodeTypes">
-         <stringlist>
-          <string>vtkMRMLLinearTransformNode</string>
-         </stringlist>
-        </property>
-        <property name="editEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0" colspan="2">
-       <widget class="QPushButton" name="calculateReferenceToFramePushButton">
-        <property name="text">
-         <string>Calculate</string>
-        </property>
-       </widget>
+       <widget class="QComboBox" name="trajectoryComboBox"/>
       </item>
      </layout>
     </widget>
