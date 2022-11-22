@@ -346,11 +346,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(None)
 
         for widget in self.trajectoryCoordinateWidgets.values():
+            widget.setTransformNodeID(self._parameterNode.GetNodeReferenceID("ReferenceToFrameTransform"))
             if not currentTrajectoryAvailable:
                 widget.reset()
             widget.setEnabled(currentTrajectoryAvailable)
 
         for name, widget in self.referenceToFrameCoordinateWidgets.items():
+            widget.setTransformNodeID(self._parameterNode.GetNodeReferenceID("ReferenceToFrameTransform"))
             coords, system = self._parameterNode.GetParameter(name).split(';')
             widget.setSystem(system)
             widget.coordinates = coords

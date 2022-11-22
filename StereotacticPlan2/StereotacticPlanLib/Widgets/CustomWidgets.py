@@ -12,6 +12,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
         self._transformNodeID = None
+        self._transformObserver = None
 
         self.systemComboBox = qt.QComboBox(self)
         self.systemComboBox.addItems(['RAS', 'XYZ'])
@@ -43,7 +44,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         transformAction = qt.QAction(self)
         transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
         transformAction.setCheckable(True)
-        # transformAction.connect("toggled(bool)", self.onTransformToggled)
+        transformAction.connect("toggled(bool)", self.onTransformToggled)
         self.transformButton = qt.QToolButton(self)
         self.transformButton.setDefaultAction(transformAction)
         self.transformButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
@@ -75,26 +76,31 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
     def getSystem(self):
         return self.systemComboBox.currentText
 
-    # def setTransformNodeID(self, nodeID):
-    #     self._transformNodeID = nodeID
-    #     self.transformButton.setEnabled(self._transformNodeID is not None)
+    def setTransformNodeID(self, nodeID):
+        if self._transformNodeID and self._transformObserver is not None:
+            slicer.util.getNode(self._transformNodeID).RemoveObserver(self._transformObserver)
+        self._transformNodeID = nodeID
+        if self._transformNodeID is None:
+            self.transformButton.setChecked(False)
+            self.transformButton.setEnabled(False)
+        else:
+            self.transformButton.setEnabled(True)
+            if self.transformButton.checked:
+                self.updateCoordinatesFromMarkupsNode()
+            self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
+            
+    def onTransformToggled(self, enabled):
+        if enabled:
+            self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID)
+        else:
+            self.markupsNode.SetAndObserveTransformNodeID(None)
+        self.updateCoordinatesFromMarkupsNode()
 
-    # def onTransformToggled(self, enabled):
-    #     m = vtk.vtkMatrix4x4()
-    #     if enabled:
-    #         slicer.util.getNode(self._transformNodeID).GetMatrixTransformToWorld(m)
-    #     else:
-    #         slicer.util.getNode(self._transformNodeID).GetMatrixTransformFromWorld(m)
-    #     coords = m.MultiplyDoublePoint(np.append(self.getNumpyCoordinates(system='RAS'),1))[:3]
-    #     if self.systemComboBox.currentText == 'XYZ':
-    #         coords = self.transformCoordsFromRASToXYZ(coords)
-    #     self.setNumpyCoordinates(coords)
-
-    def updateCoordinatesFromMarkupsNode(self, caller, event):
+    def updateCoordinatesFromMarkupsNode(self, caller=None, event=None):
         if self._updatingMarkupsFromCoordinates:
             return
         coords = np.zeros(3)
-        self.markupsNode.GetNthControlPointPosition(self.markupsNodeControlPointIndex, coords)
+        self.markupsNode.GetNthControlPointPositionWorld(self.markupsNodeControlPointIndex, coords)
         if self.systemComboBox.currentText == 'XYZ':
             coords = self.transformCoordsFromRASToXYZ(coords)
         self.setNumpyCoordinates(coords)
