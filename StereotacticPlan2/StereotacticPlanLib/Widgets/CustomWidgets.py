@@ -2,15 +2,16 @@ import slicer
 import ctk
 import qt
 import numpy as np
-
+import vtk
 class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
-    def __init__(self, auxMarkupsNode, name):
+    def __init__(self, auxFolderID, name):
         super().__init__()
 
         self._updatingCoordinatesFromMarkups = False
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
+        self._transformNodeID = None
 
         self.systemComboBox = qt.QComboBox(self)
         self.systemComboBox.addItems(['RAS', 'XYZ'])
@@ -42,7 +43,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         transformAction = qt.QAction(self)
         transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
         transformAction.setCheckable(True)
-        # transformAction.connect("toggled(bool)", self.onPlaceToggled)
+        # transformAction.connect("toggled(bool)", self.onTransformToggled)
         self.transformButton = qt.QToolButton(self)
         self.transformButton.setDefaultAction(transformAction)
         self.transformButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
@@ -50,11 +51,14 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.layout().addWidget(self.transformButton)
 
 
-        self.markupsNode = auxMarkupsNode
+        self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', name)
         self.markupsNode.AddControlPoint(0, 0, 0, name)
         self.markupsNodeControlPointIndex = self.markupsNode.GetNumberOfControlPoints()-1
         self.markupsNode.SetNthControlPointVisibility(self.markupsNodeControlPointIndex, False)
         self.markupsNode.SetNthControlPointLocked(self.markupsNodeControlPointIndex, True)
+
+        shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
+        shNode.SetItemParent(shNode.GetItemByDataNode(self.markupsNode), auxFolderID)
 
         self.markupsNode.AddObserver(self.markupsNode.PointModifiedEvent, self.updateCoordinatesFromMarkupsNode)
         self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=placeAction: pa.setChecked(False))
@@ -71,6 +75,21 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
     def getSystem(self):
         return self.systemComboBox.currentText
 
+    # def setTransformNodeID(self, nodeID):
+    #     self._transformNodeID = nodeID
+    #     self.transformButton.setEnabled(self._transformNodeID is not None)
+
+    # def onTransformToggled(self, enabled):
+    #     m = vtk.vtkMatrix4x4()
+    #     if enabled:
+    #         slicer.util.getNode(self._transformNodeID).GetMatrixTransformToWorld(m)
+    #     else:
+    #         slicer.util.getNode(self._transformNodeID).GetMatrixTransformFromWorld(m)
+    #     coords = m.MultiplyDoublePoint(np.append(self.getNumpyCoordinates(system='RAS'),1))[:3]
+    #     if self.systemComboBox.currentText == 'XYZ':
+    #         coords = self.transformCoordsFromRASToXYZ(coords)
+    #     self.setNumpyCoordinates(coords)
+
     def updateCoordinatesFromMarkupsNode(self, caller, event):
         if self._updatingMarkupsFromCoordinates:
             return
@@ -84,9 +103,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         if self._updatingCoordinatesFromMarkups:
             return
         self._updatingMarkupsFromCoordinates = True
-        coords = self.getNumpyCoordinates()
-        if self.systemComboBox.currentText == 'XYZ':
-            coords = self.transformCoordsFromXYZToRAS(coords)
+        coords = self.getNumpyCoordinates(system='RAS')
         self.markupsNode.SetNthControlPointPosition(self.markupsNodeControlPointIndex, coords)
         self._updatingMarkupsFromCoordinates = False
 

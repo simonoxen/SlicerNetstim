@@ -125,20 +125,19 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Custom Widgets
         self.updateTrajectoriesComboBox()
-        auxMarkupsNode = self.getOrCreateAuxMarkupsNode()
-        auxMarkupsNode.RemoveAllControlPoints()
+        auxFolderID = self.getOrCreateAuxFolderID()
         self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
-            self.trajectoryCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.trajectoryCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.trajectoryCoordinateWidgets[name])
         self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.referenceToFrameCoordinateWidgets[name])
         for name in ['Frame MS', 'Frame PC', 'Frame AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxMarkupsNode, name)
+            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.referenceToFrameCoordinateWidgets[name].setVisible(False)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(5, name + ':', self.referenceToFrameCoordinateWidgets[name])
@@ -176,15 +175,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
 
-    def getOrCreateAuxMarkupsNode(self):
+    def getOrCreateAuxFolderID(self):
         shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-        for i in range(slicer.mrmlScene.GetNumberOfNodesByClass('vtkMRMLMarkupsFiducialNode')):
-            auxMarkupsNode = slicer.mrmlScene.GetNthNodeByClass(i, 'vtkMRMLMarkupsFiducialNode')
-            if 'StereotacticPlan' in shNode.GetItemAttributeNames(shNode.GetItemByDataNode(auxMarkupsNode)):
-                return auxMarkupsNode
-        auxMarkupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', 'SterotacticPlanMarkupsNode')
-        shNode.SetItemAttribute(shNode.GetItemByDataNode(auxMarkupsNode), 'StereotacticPlan', '1')
-        return auxMarkupsNode
+        for i in range(slicer.mrmlScene.GetNumberOfNodesByClass('vtkMRMLFolderDisplayNode')):
+            auxFolderID = shNode.GetItemByDataNode(slicer.mrmlScene.GetNthNodeByClass(i, 'vtkMRMLFolderDisplayNode'))
+            if 'StereotacticPlan' in shNode.GetItemAttributeNames(auxFolderID):
+                shNode.RemoveItemChildren(auxFolderID)
+                return auxFolderID
+        auxFolderID = shNode.CreateFolderItem(shNode.GetSceneItemID(), 'SterotacticPlanMarkupsNodes')
+        displayNode = slicer.vtkMRMLFolderDisplayNode()
+        displayNode.SetName(shNode.GetItemName(auxFolderID))
+        displayNode.SetHideFromEditors(0)
+        displayNode.SetAttribute('SubjectHierarchy.Folder', "1")
+        shNode.GetScene().AddNode(displayNode)
+        shNode.SetItemDataNode(auxFolderID, displayNode)
+        shNode.ItemModified(auxFolderID)
+        shNode.SetItemAttribute(auxFolderID, 'StereotacticPlan', '1')
+        return auxFolderID
 
     def cleanup(self):
         """
