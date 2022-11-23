@@ -10,7 +10,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
 import StereotacticPlanLib.util
-from StereotacticPlanLib.Widgets.CustomWidgets import myCoordinatesWidget
+from StereotacticPlanLib.Widgets.CustomWidgets import CustomCoordinatesWidget, TransformableCoordinatesWidget
 
 #
 # StereotacticPlan2
@@ -128,16 +128,16 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         auxFolderID = self.getOrCreateAuxFolderID()
         self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
-            self.trajectoryCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
+            self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.trajectoryCoordinateWidgets[name])
         self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
+            self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.referenceToFrameCoordinateWidgets[name])
         for name in ['Frame MS', 'Frame PC', 'Frame AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  myCoordinatesWidget(auxFolderID, name)
+            self.referenceToFrameCoordinateWidgets[name] =  CustomCoordinatesWidget(auxFolderID, name)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.referenceToFrameCoordinateWidgets[name].setVisible(False)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(5, name + ':', self.referenceToFrameCoordinateWidgets[name])
@@ -352,7 +352,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             widget.setEnabled(currentTrajectoryAvailable)
 
         for name, widget in self.referenceToFrameCoordinateWidgets.items():
-            widget.setTransformNodeID(self._parameterNode.GetNodeReferenceID("ReferenceToFrameTransform"))
+            if isinstance(widget, TransformableCoordinatesWidget):
+                widget.setTransformNodeID(self._parameterNode.GetNodeReferenceID("ReferenceToFrameTransform"))
             coords, system = self._parameterNode.GetParameter(name).split(';')
             widget.setSystem(system)
             widget.coordinates = coords

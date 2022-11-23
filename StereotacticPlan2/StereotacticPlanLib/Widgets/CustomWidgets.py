@@ -3,7 +3,7 @@ import ctk
 import qt
 import numpy as np
 import vtk
-class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
+class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def __init__(self, auxFolderID, name):
         super().__init__()
@@ -11,7 +11,6 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self._updatingCoordinatesFromMarkups = False
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
-        self._transformNodeID = None
         self._transformObserver = None
 
         self.systemComboBox = qt.QComboBox(self)
@@ -41,16 +40,10 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.placeButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.placeButton)
 
-        transformAction = qt.QAction(self)
-        transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
-        transformAction.setCheckable(True)
-        transformAction.connect("toggled(bool)", self.onTransformToggled)
         self.transformButton = qt.QToolButton(self)
-        self.transformButton.setDefaultAction(transformAction)
         self.transformButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
         self.transformButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.transformButton)
-
 
         self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', name)
         self.markupsNode.AddControlPoint(0, 0, 0, name)
@@ -75,25 +68,6 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
     
     def getSystem(self):
         return self.systemComboBox.currentText
-
-    def setTransformNodeID(self, nodeID):
-        if self._transformNodeID and self._transformObserver is not None:
-            slicer.util.getNode(self._transformNodeID).RemoveObserver(self._transformObserver)
-        self._transformNodeID = nodeID
-        if self._transformNodeID is None:
-            self.transformButton.setChecked(False)
-            self.transformButton.setEnabled(False)
-        else:
-            self.transformButton.setEnabled(True)
-            self.onTransformToggled(self.transformButton.checked)
-            self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
-            
-    def onTransformToggled(self, enabled):
-        if enabled:
-            self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID)
-        else:
-            self.markupsNode.SetAndObserveTransformNodeID(None)
-        self.updateCoordinatesFromMarkupsNode()
 
     def updateCoordinatesFromMarkupsNode(self, caller=None, event=None):
         if self._updatingMarkupsFromCoordinates:
@@ -170,3 +144,35 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
             self._updatingCoordinatesFromMarkups = False
             self.systemComboBox.currentText = 'XYZ' if self._wasXYZ else 'RAS'
 
+
+class TransformableCoordinatesWidget(CustomCoordinatesWidget):
+
+    def __init__(self, auxFolderID, name):
+        super().__init__(auxFolderID, name)
+
+        self._transformNodeID = None
+
+        transformAction = qt.QAction(self)
+        transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
+        transformAction.setCheckable(True)
+        transformAction.connect("toggled(bool)", self.onTransformToggled)
+        self.transformButton.setDefaultAction(transformAction)
+
+    def setTransformNodeID(self, nodeID):
+        if self._transformNodeID and self._transformObserver is not None:
+            slicer.util.getNode(self._transformNodeID).RemoveObserver(self._transformObserver)
+        self._transformNodeID = nodeID
+        if self._transformNodeID is None:
+            self.transformButton.setChecked(False)
+            self.transformButton.setEnabled(False)
+        else:
+            self.transformButton.setEnabled(True)
+            self.onTransformToggled(self.transformButton.checked)
+            self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
+            
+    def onTransformToggled(self, enabled):
+        if enabled:
+            self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID)
+        else:
+            self.markupsNode.SetAndObserveTransformNodeID(None)
+        self.updateCoordinatesFromMarkupsNode()
