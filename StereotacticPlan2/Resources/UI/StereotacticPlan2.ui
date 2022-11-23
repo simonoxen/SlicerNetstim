@@ -52,7 +52,13 @@
           <string>vtkMRMLLinearTransformNode</string>
          </stringlist>
         </property>
+        <property name="noneEnabled">
+         <bool>true</bool>
+        </property>
         <property name="editEnabled">
+         <bool>true</bool>
+        </property>
+        <property name="renameEnabled">
          <bool>true</bool>
         </property>
        </widget>

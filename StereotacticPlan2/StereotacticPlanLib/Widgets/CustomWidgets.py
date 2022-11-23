@@ -85,8 +85,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
             self.transformButton.setEnabled(False)
         else:
             self.transformButton.setEnabled(True)
-            if self.transformButton.checked:
-                self.updateCoordinatesFromMarkupsNode()
+            self.onTransformToggled(self.transformButton.checked)
             self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
             
     def onTransformToggled(self, enabled):
@@ -110,7 +109,7 @@ class myCoordinatesWidget(ctk.ctkCoordinatesWidget):
             return
         self._updatingMarkupsFromCoordinates = True
         coords = self.getNumpyCoordinates(system='RAS')
-        self.markupsNode.SetNthControlPointPosition(self.markupsNodeControlPointIndex, coords)
+        self.markupsNode.SetNthControlPointPositionWorld(self.markupsNodeControlPointIndex, coords)
         self._updatingMarkupsFromCoordinates = False
 
     def onSystemChanged(self, system):
