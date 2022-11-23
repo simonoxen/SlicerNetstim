@@ -144,6 +144,17 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             self.ui.referenceToFrameCollapsibleButton.layout().labelForField(self.referenceToFrameCoordinateWidgets[name]).setVisible(False)
             self.ui.referenceToFrameModeComboBox.currentTextChanged.connect(lambda t,w=self.referenceToFrameCoordinateWidgets[name]: [w.setVisible(t=='ACPC Register'), self.ui.referenceToFrameCollapsibleButton.layout().labelForField(w).setVisible(t=='ACPC Register')])
 
+        buttonSize = self.trajectoryCoordinateWidgets['Entry'].transformButton.height
+        transformReferenceVolumeAction = qt.QAction()
+        transformReferenceVolumeAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
+        transformReferenceVolumeAction.setCheckable(True)
+        self.transformReferenceVolumeButton = qt.QToolButton()
+        self.transformReferenceVolumeButton.setDefaultAction(transformReferenceVolumeAction)
+        self.transformReferenceVolumeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
+        self.transformReferenceVolumeButton.setFixedSize(buttonSize, buttonSize)
+        self.transformReferenceVolumeButton.clicked.connect(self.updateParameterNodeFromGUI)
+        self.ui.referenceVolumeLayout.addWidget(self.transformReferenceVolumeButton)
+
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
         # "setMRMLScene(vtkMRMLScene*)" slot.
@@ -162,6 +173,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
         self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         # self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         # self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         # self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
@@ -360,7 +372,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
+        self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
 
+        self.transformReferenceVolumeButton.setEnabled(self._parameterNode.GetNodeReference("ReferenceToFrameTransform") and self._parameterNode.GetNodeReference("ReferenceVolume"))
+        self.transformReferenceVolumeButton.setChecked(self._parameterNode.GetNodeReference("ReferenceVolume") and self._parameterNode.GetNodeReference("ReferenceVolume").GetTransformNodeID() is not None)
 
         # # Update node selectors and sliders
         # self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputVolume"))
@@ -403,6 +418,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", self.ui.referenceToFrameTransformNodeComboBox.currentNodeID)
+        self._parameterNode.SetNodeReferenceID("ReferenceVolume", self.ui.referenceVolumeNodeComboBox.currentNodeID)
+
+        if self.ui.referenceVolumeNodeComboBox.currentNodeID != "":
+            slicer.util.getNode(self.ui.referenceVolumeNodeComboBox.currentNodeID).SetAndObserveTransformNodeID(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID if self.transformReferenceVolumeButton.checked else None)
 
         # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
         # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)

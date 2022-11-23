@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>582</width>
-    <height>744</height>
+    <width>469</width>
+    <height>608</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -17,6 +17,13 @@
       <string>Reference to frame</string>
      </property>
      <layout class="QFormLayout" name="formLayout_2">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>Reference Volume: </string>
+        </property>
+       </widget>
+      </item>
       <item row="1" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
@@ -70,21 +77,27 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_7">
-        <property name="text">
-         <string>Reference Volume: </string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="1">
-       <widget class="qMRMLNodeComboBox" name="referenceVolumeNodeComboBox">
-        <property name="nodeTypes">
-         <stringlist>
-          <string>vtkMRMLVolumeNode</string>
-         </stringlist>
-        </property>
-       </widget>
+       <layout class="QHBoxLayout" name="referenceVolumeLayout">
+        <item>
+         <widget class="qMRMLNodeComboBox" name="referenceVolumeNodeComboBox">
+          <property name="nodeTypes">
+           <stringlist>
+            <string>vtkMRMLScalarVolumeNode</string>
+           </stringlist>
+          </property>
+          <property name="noneEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="addEnabled">
+           <bool>false</bool>
+          </property>
+          <property name="editEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
@@ -147,22 +160,6 @@
   <connection>
    <sender>StereotacticPlan2</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>referenceVolumeNodeComboBox</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>184</x>
-     <y>236</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>209</x>
-     <y>125</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>StereotacticPlan2</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
    <receiver>referenceToFrameTransformNodeComboBox</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
@@ -173,6 +170,22 @@
     <hint type="destinationlabel">
      <x>216</x>
      <y>213</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>StereotacticPlan2</sender>
+   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
+   <receiver>referenceVolumeNodeComboBox</receiver>
+   <slot>setMRMLScene(vtkMRMLScene*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>234</x>
+     <y>303</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>354</x>
+     <y>58</y>
     </hint>
    </hints>
   </connection>
