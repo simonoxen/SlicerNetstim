@@ -2,33 +2,40 @@ import qt, slicer
 import numpy as np
 import re
 
-def setParameterNodeFromDevice(parameterNode):
-  filePath = qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf')
+def setParameterNodeFromDevice(parameterNode, filePath=None):
+  filePath = qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf') if filePath is None else filePath
   if filePath == '':
     return
   # get planning
   stereotaxyReport = StereotaxyReport(filePath)
   planningDictionary = stereotaxyReport.getArcSettings()
-  # frame fiducials
-  frameFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','FrameFid')
-  frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'Headring'), 'frameAC')
-  frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'Headring'), 'framePC')
-  frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'Headring'), 'frameMS')
-  # anat fiducials
-  referenceFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','ReferenceFid')
-  referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'DICOM'), 'anatAC')
-  referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'DICOM'), 'anatPC')
-  referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'DICOM'), 'anatMS')
-  # set values
-  wasModified = parameterNode.StartModify()
-  parameterNode.SetParameter("ArcAngle", planningDictionary["Arc Angle"])
-  parameterNode.SetParameter("RingAngle", planningDictionary["Ring Angle"])
-  parameterNode.SetParameter("FrameTargetCoordinates", planningDictionary["Headring Coordinates"])
-  parameterNode.SetParameter("Mounting", planningDictionary["Mounting"])
-  parameterNode.SetNodeReferenceID("ReferenceACPCMSMarkups", referenceFidNode.GetID())
-  parameterNode.SetNodeReferenceID("FrameACPCMSMarkups", frameFidNode.GetID())
-  parameterNode.SetParameter("ApplyXYZToRAS", "1")
-  parameterNode.EndModify(wasModified)
+  # "Reference AC", "Reference PC", "Reference MS", "Frame AC", "Frame PC", "Frame MS"
+  parameterNode.SetParameter("Frame AC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('AC', 'Headring')]) + ';XYZ')
+  parameterNode.SetParameter("Frame PC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('PC', 'Headring')]) + ';XYZ')
+  parameterNode.SetParameter("Frame MS", ','.join([str(x) for x in stereotaxyReport.getCoordinates('MS', 'Headring')]) + ';XYZ')
+  parameterNode.SetParameter("Reference AC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('AC', 'DICOM')]) + ';RAS')
+  parameterNode.SetParameter("Reference PC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('PC', 'DICOM')]) + ';RAS')
+  parameterNode.SetParameter("Reference MS", ','.join([str(x) for x in stereotaxyReport.getCoordinates('MS', 'DICOM')]) + ';RAS')
+  # # frame fiducials
+  # frameFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','FrameFid')
+  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'Headring'), 'frameAC')
+  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'Headring'), 'framePC')
+  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'Headring'), 'frameMS')
+  # # anat fiducials
+  # referenceFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','ReferenceFid')
+  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'DICOM'), 'anatAC')
+  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'DICOM'), 'anatPC')
+  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'DICOM'), 'anatMS')
+  # # set values
+  # wasModified = parameterNode.StartModify()
+  # parameterNode.SetParameter("ArcAngle", planningDictionary["Arc Angle"])
+  # parameterNode.SetParameter("RingAngle", planningDictionary["Ring Angle"])
+  # parameterNode.SetParameter("FrameTargetCoordinates", planningDictionary["Headring Coordinates"])
+  # parameterNode.SetParameter("Mounting", planningDictionary["Mounting"])
+  # parameterNode.SetNodeReferenceID("ReferenceACPCMSMarkups", referenceFidNode.GetID())
+  # parameterNode.SetNodeReferenceID("FrameACPCMSMarkups", frameFidNode.GetID())
+  # parameterNode.SetParameter("ApplyXYZToRAS", "1")
+  # parameterNode.EndModify(wasModified)
 class StereotaxyReport():
 
   def __init__(self, PDFPath):

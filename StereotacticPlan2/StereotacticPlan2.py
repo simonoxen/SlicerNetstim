@@ -319,7 +319,15 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self._parameterNode.EndModify(wasModified)
 
     def importTrajectoryFrom(self, importer):
-        print(importer)
+        # Get importer module
+        import StereotacticPlanLib.ImportFrom
+        import importlib
+        importlib.import_module('.'.join(['StereotacticPlanLib', 'ImportFrom', importer]))
+        importerModule = getattr(StereotacticPlanLib.ImportFrom, importer)
+        # Modify all properties in a single batch
+        wasModified = self._parameterNode.StartModify()  
+        importerModule.setParameterNodeFromDevice(self._parameterNode)
+        self._parameterNode.EndModify(wasModified)
 
     def updateTrajectoriesComboBox(self, trajectoryNames=None):
         trajectoryNames = [] if trajectoryNames is None else trajectoryNames
@@ -623,7 +631,17 @@ class StereotacticPlan2Test(ScriptedLoadableModuleTest):
         """Run as few or as many tests as needed here.
         """
         self.setUp()
-        self.test_StereotacticPlan21()
+        self.test_BrainlabImport()
+    
+    def test_BrainlabImport(self):
+        import StereotacticPlanLib.ImportFrom.Brainlab as bl
+        logic = StereotacticPlan2Logic()
+        parameterNode = logic.getParameterNode()
+        reportFilePath = "C:\\Users\\simon\\Desktop\\test\\StereotaxyReport.pdf"
+        bl.setParameterNodeFromDevice(parameterNode, reportFilePath)
+        volumeFilePath = "C:\\Users\\simon\\Desktop\\test\\anat_t1.nii"
+        volumeNode = slicer.util.loadVolume(volumeFilePath)
+        parameterNode.SetNodeReferenceID("ReferenceVolume", volumeNode.GetID())
 
     def test_StereotacticPlan21(self):
         """ Ideally you should have several levels of tests.  At the lowest level
