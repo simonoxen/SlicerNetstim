@@ -2,7 +2,7 @@ import logging
 import os
 import glob
 import json
-
+import numpy as np
 import vtk, qt
 
 import slicer
@@ -126,11 +126,19 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Custom Widgets
         self.updateTrajectoriesComboBox()
         auxFolderID = self.getOrCreateAuxFolderID()
+        
         self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
             self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
-            self.ui.trajectoriesCollapsibleButton.layout().addRow(name + ':', self.trajectoryCoordinateWidgets[name])
+            self.ui.trajectoriesCollapsibleButton.layout().insertRow(2,name + ':', self.trajectoryCoordinateWidgets[name])
+        for widget in [self.trajectoryCoordinateWidgets['Entry'], self.ui.rollAngleSliderWidget]:
+            widget.setVisible(False)
+            self.ui.trajectoriesCollapsibleButton.layout().labelForField(widget).setVisible(False)
+            self.ui.trajectoryModeComboBox.currentTextChanged.connect(lambda t,w=widget,target_t='Target Entry Roll': [w.setVisible(t==target_t), self.ui.trajectoriesCollapsibleButton.layout().labelForField(w).setVisible(t==target_t)])
+        for widget in [self.ui.ringAngleSliderWidget, self.ui.arcAngleSliderWidget, self.ui.mountingComboBox]:
+            self.ui.trajectoryModeComboBox.currentTextChanged.connect(lambda t,w=widget,target_t='Target Mounting Ring Arc': [w.setVisible(t==target_t), self.ui.trajectoriesCollapsibleButton.layout().labelForField(w).setVisible(t==target_t)])
+        
         self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
             self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
@@ -173,7 +181,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
         self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.trajectoryModeComboBox.connect("'currentTextChanged(QString)",  self.updateParameterNodeFromGUI)
+        self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        self.ui.mountingComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
         # self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         # self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         # self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
@@ -182,6 +196,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Buttons
         self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
         self.ui.calculateReferenceToFramePushButton.connect('clicked(bool)', self.onCalculateReferenceToFrame)
+        self.ui.calculateTrajectoryPushButton.connect('clicked(bool)', self.onCalculateTrajectory)
         # self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
 
         # Make sure parameter node is initialized (needed for module reload)
@@ -299,8 +314,17 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if not trajectoryName:
             return
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectories.append({k:'0,0,0;RAS' for k in self.trajectoryCoordinateWidgets.keys()})
-        trajectories[-1]['Name'] = trajectoryName
+        trajectory = {}
+        trajectory['Entry'] = '0,0,0;RAS'
+        trajectory['Target'] = '0,0,0;RAS'
+        trajectory['Mounting'] = 'lateral-right'
+        trajectory['Ring'] = 90
+        trajectory['Arc'] = 90
+        trajectory['Roll'] = 0
+        trajectory['Mode'] = 'Target Mounting Ring Arc'
+        trajectory['OutputTransformID'] = ''
+        trajectory['Name'] = trajectoryName
+        trajectories.append(trajectory)
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
@@ -357,9 +381,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         currentTrajectoryAvailable = trajectories and trajectoryIndex
 
+        self.ui.trajectoryModeComboBox.setEnabled(currentTrajectoryAvailable)
+        self.ui.mountingComboBox.setEnabled(currentTrajectoryAvailable)
+        self.ui.ringAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
+        self.ui.arcAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
+        self.ui.rollAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
+        self.ui.trajectoryTransformNodeComboBox.setEnabled(currentTrajectoryAvailable)
+
         if currentTrajectoryAvailable:
             currentTrajectory = trajectories[int(trajectoryIndex)]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
+            self.ui.trajectoryModeComboBox.setCurrentText(currentTrajectory['Mode'])
+            self.ui.mountingComboBox.setCurrentText(currentTrajectory['Mounting'])
+            self.ui.ringAngleSliderWidget.value = currentTrajectory['Ring']
+            self.ui.arcAngleSliderWidget.value = currentTrajectory['Arc']
+            self.ui.rollAngleSliderWidget.value = currentTrajectory['Roll']
+            transformNode = slicer.util.getNode(currentTrajectory['OutputTransformID']) if currentTrajectory['OutputTransformID'] else None
+            self.ui.trajectoryTransformNodeComboBox.setCurrentNode(transformNode)
             self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
         else:
             self.ui.trajectoryComboBox.setCurrentText('Select...')
@@ -378,7 +416,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             widget.setSystem(system)
             widget.coordinates = coords
 
+        self.ui.calculateTrajectoryPushButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
+
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
         self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
 
@@ -419,6 +459,12 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         if trajectories and trajectoryIndex:
             currentTrajectory = trajectories[int(trajectoryIndex)]
+            currentTrajectory['Mode'] = self.ui.trajectoryModeComboBox.currentText
+            currentTrajectory['Mounting'] = self.ui.mountingComboBox.currentText
+            currentTrajectory['Ring'] = self.ui.ringAngleSliderWidget.value
+            currentTrajectory['Arc'] = self.ui.arcAngleSliderWidget.value
+            currentTrajectory['Roll'] = self.ui.rollAngleSliderWidget.value
+            currentTrajectory['OutputTransformID'] = self.ui.trajectoryTransformNodeComboBox.currentNodeID
             self.updateTrajectoryFromCoordinatesWidget(currentTrajectory)
 
         for name, widget in self.referenceToFrameCoordinateWidgets.items():
@@ -466,6 +512,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                                                 sourceCoordinates,
                                                 targetCoordinates)
 
+    def onCalculateTrajectory(self):
+        try:
+            if self.ui.trajectoryModeComboBox.currentText == 'Target Mounting Ring Arc':
+                self.logic.computeTrajectoryFromTargetMountingRingArc(self.ui.trajectoryTransformNodeComboBox.currentNode(),
+                                self.trajectoryCoordinateWidgets['Target'].getNumpyCoordinates(system='RAS'),
+                                self.ui.mountingComboBox.currentText,
+                                self.ui.ringAngleSliderWidget.value,
+                                self.ui.arcAngleSliderWidget.value)
+            else:
+                self.logic.computeTrajectoryFromTargetEntryRoll(self.ui.trajectoryTransformNodeComboBox.currentNode(),
+                                self.trajectoryCoordinateWidgets['Target'].getNumpyCoordinates(system='RAS'),
+                                self.trajectoryCoordinateWidgets['Entry'].getNumpyCoordinates(system='RAS'),
+                                self.ui.rollAngleSliderWidget.value)
+        except Exception as e:
+            slicer.util.errorDisplay("Failed to compute transform: "+str(e))
+            import traceback
+            traceback.print_exc()
 
     # def onApplyButton(self):
     #     """
@@ -533,37 +596,6 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("TrajectoryIndex"):
             parameterNode.SetParameter("TrajectoryIndex", "")
 
-    def process(self, inputVolume, outputVolume, imageThreshold, invert=False, showResult=True):
-        """
-        Run the processing algorithm.
-        Can be used without GUI widget.
-        :param inputVolume: volume to be thresholded
-        :param outputVolume: thresholding result
-        :param imageThreshold: values above/below this threshold will be set to 0
-        :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
-        :param showResult: show output volume in slice viewers
-        """
-
-        if not inputVolume or not outputVolume:
-            raise ValueError("Input or output volume is invalid")
-
-        import time
-        startTime = time.time()
-        logging.info('Processing started')
-
-        # Compute the thresholded output volume using the "Threshold Scalar Volume" CLI module
-        cliParams = {
-            'InputVolume': inputVolume.GetID(),
-            'OutputVolume': outputVolume.GetID(),
-            'ThresholdValue': imageThreshold,
-            'ThresholdType': 'Above' if invert else 'Below'
-        }
-        cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True, update_display=showResult)
-        # We don't need the CLI module node anymore, remove it to not clutter the scene with it
-        slicer.mrmlScene.RemoveNode(cliNode)
-
-        stopTime = time.time()
-        logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
     def runFiducialRegistration(self, outputTransform, sourceCoords, targetCoords):
         auxSourceNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')
@@ -609,6 +641,65 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
 
         slicer.mrmlScene.RemoveNode(auxLineNode)
         slicer.mrmlScene.RemoveNode(ACPCMSNode)
+
+    def computeTrajectoryFromTargetMountingRingArc(self, outputTransform, frameTargetCoordinates, mounting, ringAngle, arcAngle):
+        """
+        Run the processing algorithm.
+        Can be used without GUI widget.
+        """
+
+        if not outputTransform:
+            raise ValueError("output transform is invalid")
+
+        # Get ring and arc directions
+        if mounting == 'lateral-right':
+            initDirection = [0, 1, 0]
+            ringDirection = [1, 0, 0]
+            arcDirection =  [0, -np.sin(np.deg2rad(ringAngle)), np.cos(np.deg2rad(ringAngle))]
+        elif mounting == 'lateral-left':
+            initDirection = [0, -1, 0]
+            ringDirection = [-1, 0, 0]
+            arcDirection  = [0, np.sin(np.deg2rad(ringAngle)), np.cos(np.deg2rad(ringAngle))]
+        elif mounting == 'sagittal-anterior':
+            initDirection = [-1, 0, 0]
+            ringDirection = [0, 1, 0]
+            arcDirection  = [np.sin(np.deg2rad(ringAngle)), 0, np.cos(np.deg2rad(ringAngle))]
+        elif mounting == 'sagittal-posterior':
+            initDirection = [1, 0, 0]
+            ringDirection = [0, -1, 0]
+            arcDirection  = [-np.sin(np.deg2rad(ringAngle)), 0, np.cos(np.deg2rad(ringAngle))]
+
+        # Create vtk Transform
+        vtkTransform = vtk.vtkTransform()
+        vtkTransform.Translate(frameTargetCoordinates)
+        vtkTransform.RotateWXYZ(arcAngle, arcDirection[0], arcDirection[1], arcDirection[2])
+        vtkTransform.RotateWXYZ(ringAngle, ringDirection[0], ringDirection[1], ringDirection[2])
+        vtkTransform.RotateWXYZ(90, initDirection[0], initDirection[1], initDirection[2])
+
+        # Set to node
+        outputTransform.SetAndObserveTransformToParent(vtkTransform)
+
+    def computeTrajectoryFromTargetEntryRoll(self, outputTransform, frameTargetCoordinates, frameEntryCoordinates, rollAngle):
+
+        entryTargetDirection = frameEntryCoordinates - frameTargetCoordinates
+        vtk.vtkMath().Normalize(entryTargetDirection)
+        superiorInferiorDirection = np.array([0,0,1])
+
+        ang_rad = np.arccos(vtk.vtkMath().Dot(entryTargetDirection, superiorInferiorDirection))
+        ang_deg = np.rad2deg(ang_rad)
+
+        cross = np.zeros(3)
+        vtk.vtkMath().Cross(entryTargetDirection, superiorInferiorDirection, cross)
+
+        if vtk.vtkMath().Dot(cross,superiorInferiorDirection) >= 0:
+            ang_deg = -1 * ang_deg
+        
+        vtkTransform = vtk.vtkTransform()
+        vtkTransform.Translate(frameTargetCoordinates)
+        vtkTransform.RotateWXYZ(rollAngle, entryTargetDirection[0], entryTargetDirection[1], entryTargetDirection[2])
+        vtkTransform.RotateWXYZ(ang_deg, cross[0], cross[1], cross[2])
+
+        outputTransform.SetAndObserveTransformToParent(vtkTransform)
 
 
 #

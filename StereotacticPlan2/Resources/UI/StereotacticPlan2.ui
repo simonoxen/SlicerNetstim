@@ -115,8 +115,149 @@
         </property>
        </widget>
       </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_3">
+        <property name="text">
+         <string>Mode:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="trajectoryModeComboBox">
+        <item>
+         <property name="text">
+          <string>Target Mounting Ring Arc</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Target Entry Roll</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>Ring: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="ctkSliderWidget" name="ringAngleSliderWidget">
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>180.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>90.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>Arc: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="ctkSliderWidget" name="arcAngleSliderWidget">
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>180.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>90.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Roll:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="ctkSliderWidget" name="rollAngleSliderWidget">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="maximum">
+         <double>360.000000000000000</double>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="1">
        <widget class="QComboBox" name="trajectoryComboBox"/>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="mountingComboBox">
+        <item>
+         <property name="text">
+          <string>lateral-right</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>lateral-left</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>sagittal-anterior</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>sagittal-posterior</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_9">
+        <property name="text">
+         <string>Mounting: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="label_10">
+        <property name="text">
+         <string>Output Transform:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="qMRMLNodeComboBox" name="trajectoryTransformNodeComboBox">
+        <property name="nodeTypes">
+         <stringlist>
+          <string>vtkMRMLLinearTransformNode</string>
+         </stringlist>
+        </property>
+        <property name="noneEnabled">
+         <bool>true</bool>
+        </property>
+        <property name="editEnabled">
+         <bool>true</bool>
+        </property>
+        <property name="renameEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0" colspan="2">
+       <widget class="QPushButton" name="calculateTrajectoryPushButton">
+        <property name="text">
+         <string>Calculate</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>
@@ -142,6 +283,11 @@
    <extends>QWidget</extends>
    <header>ctkCollapsibleButton.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>ctkSliderWidget</class>
+   <extends>QWidget</extends>
+   <header>ctkSliderWidget.h</header>
   </customwidget>
   <customwidget>
    <class>qMRMLNodeComboBox</class>
@@ -186,6 +332,22 @@
     <hint type="destinationlabel">
      <x>354</x>
      <y>58</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>StereotacticPlan2</sender>
+   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
+   <receiver>trajectoryTransformNodeComboBox</receiver>
+   <slot>setMRMLScene(vtkMRMLScene*)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>234</x>
+     <y>303</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>282</x>
+     <y>359</y>
     </hint>
    </hints>
   </connection>

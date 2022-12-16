@@ -1,6 +1,7 @@
 import qt, slicer
 import numpy as np
 import re
+import json
 
 def setParameterNodeFromDevice(parameterNode, filePath=None):
   filePath = qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf') if filePath is None else filePath
@@ -9,13 +10,32 @@ def setParameterNodeFromDevice(parameterNode, filePath=None):
   # get planning
   stereotaxyReport = StereotaxyReport(filePath)
   planningDictionary = stereotaxyReport.getArcSettings()
-  # "Reference AC", "Reference PC", "Reference MS", "Frame AC", "Frame PC", "Frame MS"
-  parameterNode.SetParameter("Frame AC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('AC', 'Headring')]) + ';XYZ')
-  parameterNode.SetParameter("Frame PC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('PC', 'Headring')]) + ';XYZ')
-  parameterNode.SetParameter("Frame MS", ','.join([str(x) for x in stereotaxyReport.getCoordinates('MS', 'Headring')]) + ';XYZ')
-  parameterNode.SetParameter("Reference AC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('AC', 'DICOM')]) + ';RAS')
-  parameterNode.SetParameter("Reference PC", ','.join([str(x) for x in stereotaxyReport.getCoordinates('PC', 'DICOM')]) + ';RAS')
-  parameterNode.SetParameter("Reference MS", ','.join([str(x) for x in stereotaxyReport.getCoordinates('MS', 'DICOM')]) + ';RAS')
+  
+  wasModified = parameterNode.StartModify()
+  # ACPC
+  parameterNode.SetParameter("Frame AC", stereotaxyReport.getCoordinates('AC', 'Headring') + ';XYZ')
+  parameterNode.SetParameter("Frame PC", stereotaxyReport.getCoordinates('PC', 'Headring') + ';XYZ')
+  parameterNode.SetParameter("Frame MS", stereotaxyReport.getCoordinates('MS', 'Headring') + ';XYZ')
+  parameterNode.SetParameter("Reference AC", stereotaxyReport.getCoordinates('AC', 'DICOM') + ';RAS')
+  parameterNode.SetParameter("Reference PC", stereotaxyReport.getCoordinates('PC', 'DICOM') + ';RAS')
+  parameterNode.SetParameter("Reference MS", stereotaxyReport.getCoordinates('MS', 'DICOM') + ';RAS')
+  # trajectories
+  trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
+  brainlab_trajectory = {}
+  brainlab_trajectory['Name'] = 'trajectory from Brianlab'
+  brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
+  brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
+  brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'
+  brainlab_trajectory['Mounting'] = planningDictionary["Mounting"]
+  brainlab_trajectory['Arc'] = float(planningDictionary["Arc Angle"])
+  brainlab_trajectory['Ring'] = float(planningDictionary["Ring Angle"])
+  brainlab_trajectory['Roll'] = 0
+  brainlab_trajectory['OutputTransformID'] = ''
+  trajectories.append(brainlab_trajectory)
+  parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
+  parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
+  parameterNode.EndModify(wasModified)
+
   # # frame fiducials
   # frameFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','FrameFid')
   # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'Headring'), 'frameAC')
@@ -35,7 +55,6 @@ def setParameterNodeFromDevice(parameterNode, filePath=None):
   # parameterNode.SetNodeReferenceID("ReferenceACPCMSMarkups", referenceFidNode.GetID())
   # parameterNode.SetNodeReferenceID("FrameACPCMSMarkups", frameFidNode.GetID())
   # parameterNode.SetParameter("ApplyXYZToRAS", "1")
-  # parameterNode.EndModify(wasModified)
 class StereotaxyReport():
 
   def __init__(self, PDFPath):
@@ -105,7 +124,8 @@ class StereotaxyReport():
     # extract text
     PDFText = self.pdf.pages[1].crop(cropBoundingBox).extract_text()
     # extract coords
-    m = re.search('(?<=' + queryPoint + ' Point)' + r' [-]?\d+[.]\d+ mm' * 3, PDFText)
+    queryPoint = queryPoint + ' Point' if queryPoint in ['AC','PC','MS'] else queryPoint
+    m = re.search('(?<=' + queryPoint + ')' + r' [-]?\d+[.]\d+ mm' * 3, PDFText)
     xyz_str = m.group(0).split('mm')
     xyz_flt = [float(x) for x in xyz_str[:-1]]
     # transform
@@ -115,7 +135,7 @@ class StereotaxyReport():
                         [  0,  0,  1,  0],
                         [  0,  0,  0,  1]])
       xyz_flt = np.dot(toRAS, np.append(xyz_flt, 1))[:3]
-    return xyz_flt
+    return ','.join([str(x) for x in xyz_flt])
 
   def getDICOMInformation(self):
     hStart = self.findHeightContainingText(1, self.pdfHeight * 0.5, "DICOM Coordinates") + 15
