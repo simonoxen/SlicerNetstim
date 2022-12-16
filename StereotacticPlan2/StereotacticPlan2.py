@@ -163,6 +163,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.transformReferenceVolumeButton.clicked.connect(self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeLayout.addWidget(self.transformReferenceVolumeButton)
 
+        viewTrajectoryAction = qt.QAction()
+        viewTrajectoryAction.setIcon(qt.QIcon(":/Icons/Small/SlicerVisible.png"))
+        viewTrajectoryAction.setCheckable(True)
+        self.ui.viewTrajectoryToolButton.setDefaultAction(viewTrajectoryAction)
+        self.ui.viewTrajectoryToolButton.setFixedSize(buttonSize, buttonSize)
+        self.ui.viewTrajectoryToolButton.connect("toggled(bool)", self.onViewTrajectoryToggled)
+
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
         # "setMRMLScene(vtkMRMLScene*)" slot.
@@ -180,6 +187,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
+        self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updatePreviewLineTransform)
         self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
@@ -416,6 +424,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             widget.setSystem(system)
             widget.coordinates = coords
 
+        self.ui.viewTrajectoryToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateTrajectoryPushButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
 
@@ -529,6 +538,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             slicer.util.errorDisplay("Failed to compute transform: "+str(e))
             import traceback
             traceback.print_exc()
+
+
+    def onViewTrajectoryToggled(self, state):
+        if state:
+            # add node and default points
+            markupsLineNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsLineNode')
+            self._parameterNode.SetNodeReferenceID("PreviewLine", markupsLineNode.GetID())
+            markupsLineNode.AddControlPointWorld(vtk.vtkVector3d(0,0,0), 'Target')
+            markupsLineNode.AddControlPointWorld(vtk.vtkVector3d(0,0,80), '2')
+            self.updatePreviewLineTransform(self.ui.trajectoryTransformNodeComboBox.currentNode())
+        elif self._parameterNode.GetNodeReferenceID("PreviewLine"):
+            # remove node
+            slicer.mrmlScene.RemoveNode(self._parameterNode.GetNodeReference("PreviewLine"))
+
+    def updatePreviewLineTransform(self, node):
+        if self._parameterNode.GetNodeReferenceID("PreviewLine"):
+            self._parameterNode.GetNodeReference("PreviewLine").SetAndObserveTransformNodeID(node.GetID() if node else None)
 
     # def onApplyButton(self):
     #     """
