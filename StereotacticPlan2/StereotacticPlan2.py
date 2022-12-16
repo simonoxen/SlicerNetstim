@@ -170,6 +170,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.viewTrajectoryToolButton.setFixedSize(buttonSize, buttonSize)
         self.ui.viewTrajectoryToolButton.connect("toggled(bool)", self.onViewTrajectoryToggled)
 
+        resliceDriverAction = qt.QAction()
+        resliceDriverAction.setIcon(qt.QIcon(qt.QPixmap(self.resourcePath('Icons/VolumeResliceDriver.png'))))
+        resliceDriverAction.setCheckable(True)
+        self.ui.resliceDriverToolButton.setDefaultAction(resliceDriverAction)
+        self.ui.resliceDriverToolButton.connect("toggled(bool)", self.setDefaultResliceDriver)
+        self.ui.resliceDriverToolButton.setFixedSize(buttonSize, buttonSize)
+
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
         # "setMRMLScene(vtkMRMLScene*)" slot.
@@ -187,9 +194,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updatePreviewLineTransform)
-        self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", lambda n,w=self.ui.resliceDriverToolButton: self.setDefaultResliceDriver(w.checked))
+        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updatePreviewLineTransform)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.trajectoryModeComboBox.connect("'currentTextChanged(QString)",  self.updateParameterNodeFromGUI)
         self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
@@ -425,6 +433,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             widget.coordinates = coords
 
         self.ui.viewTrajectoryToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
+        self.ui.resliceDriverToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateTrajectoryPushButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
 
@@ -555,6 +564,35 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
     def updatePreviewLineTransform(self, node):
         if self._parameterNode.GetNodeReferenceID("PreviewLine"):
             self._parameterNode.GetNodeReference("PreviewLine").SetAndObserveTransformNodeID(node.GetID() if node else None)
+
+    def setDefaultResliceDriver(self, state):
+        if state:
+            # Get Reslice Driver Logic
+            try:    
+                logic = slicer.modules.volumereslicedriver.logic()
+            except:
+                qt.QMessageBox.warning(qt.QWidget(),'','Reslice Driver Module not Found')
+                return
+            transformNodeID = self.ui.trajectoryTransformNodeComboBox.currentNodeID
+            # Settings
+            redSettings    = {'node':slicer.util.getNode('vtkMRMLSliceNodeRed'),    'mode':6, 'angle':90 , 'flip':True}
+            yellowSettings = {'node':slicer.util.getNode('vtkMRMLSliceNodeYellow'), 'mode':5, 'angle':180, 'flip':False}
+            greenSettings  = {'node':slicer.util.getNode('vtkMRMLSliceNodeGreen'),  'mode':4, 'angle':180, 'flip':False}
+            # Set
+            for settings in [redSettings, yellowSettings, greenSettings]:
+                logic.SetDriverForSlice(    transformNodeID,    settings['node'])
+                logic.SetModeForSlice(      settings['mode'],   settings['node'])
+                logic.SetRotationForSlice(  settings['angle'],  settings['node'])
+                logic.SetFlipForSlice(      settings['flip'],   settings['node'])
+        else:
+            sliceNodes = slicer.util.getNodesByClass("vtkMRMLSliceNode")
+            for sliceNode in sliceNodes:
+                if sliceNode.GetName() == 'Red':
+                    sliceNode.SetOrientationToAxial()
+                elif sliceNode.GetName() == 'Green':
+                    sliceNode.SetOrientationToCoronal()
+                elif sliceNode.GetName() == 'Yellow':
+                    sliceNode.SetOrientationToSagittal()
 
     # def onApplyButton(self):
     #     """
