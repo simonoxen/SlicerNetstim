@@ -131,6 +131,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         for name in ['Entry', 'Target']:
             self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
+            self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateOutputTrajectoryTransform)
             self.ui.trajectoriesCollapsibleButton.layout().insertRow(2,name + ':', self.trajectoryCoordinateWidgets[name])
         for widget in [self.trajectoryCoordinateWidgets['Entry'], self.ui.rollAngleSliderWidget]:
             widget.setVisible(False)
@@ -199,21 +200,23 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.trajectoryModeComboBox.connect("'currentTextChanged(QString)",  self.updateParameterNodeFromGUI)
+        self.ui.trajectoryModeComboBox.connect("currentTextChanged(QString)",  self.updateParameterNodeFromGUI)
         self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.mountingComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
-        # self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        # self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
-        # self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
-        # self.ui.invertedOutputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
 
         # Buttons
         self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
         self.ui.calculateReferenceToFramePushButton.connect('clicked(bool)', self.onCalculateReferenceToFrame)
         self.ui.calculateTrajectoryPushButton.connect('clicked(bool)', self.onCalculateTrajectory)
-        # self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+
+        # Auto Update
+        self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
+        self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
+        self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
+        self.ui.mountingComboBox.currentIndexChanged.connect(self.updateOutputTrajectoryTransform)
+        self.ui.trajectoryModeComboBox.connect("currentTextChanged(QString)",  self.updateOutputTrajectoryTransform)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -529,6 +532,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             self.logic.runFiducialRegistration(self.ui.referenceToFrameTransformNodeComboBox.currentNode(),
                                                 sourceCoordinates,
                                                 targetCoordinates)
+
+    def updateOutputTrajectoryTransform(self):
+        if self.ui.autoUpdateTrajectoryCheckBox.checked and self.ui.trajectoryTransformNodeComboBox.currentNode():
+            self.onCalculateTrajectory()
 
     def onCalculateTrajectory(self):
         try:
