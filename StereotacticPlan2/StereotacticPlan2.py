@@ -129,7 +129,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         
         self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
-            self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
+            self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name, self.setTransformableWidgetsState)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateOutputTrajectoryTransform)
             self.ui.trajectoriesCollapsibleButton.layout().insertRow(2,name + ':', self.trajectoryCoordinateWidgets[name])
@@ -142,7 +142,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         
         self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name)
+            self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name, self.setTransformableWidgetsState)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.referenceToFrameCoordinateWidgets[name])
         for name in ['Frame MS', 'Frame PC', 'Frame AC']:
@@ -161,7 +161,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.transformReferenceVolumeButton.setDefaultAction(transformReferenceVolumeAction)
         self.transformReferenceVolumeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
         self.transformReferenceVolumeButton.setFixedSize(buttonSize, buttonSize)
-        self.transformReferenceVolumeButton.clicked.connect(self.updateParameterNodeFromGUI)
+        self.transformReferenceVolumeButton.toggled.connect(self.updateParameterNodeFromGUI)
+        self.transformReferenceVolumeButton.toggled.connect(self.setTransformableWidgetsState)
         self.ui.referenceVolumeLayout.addWidget(self.transformReferenceVolumeButton)
 
         viewTrajectoryAction = qt.QAction()
@@ -446,21 +447,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.transformReferenceVolumeButton.setEnabled(self._parameterNode.GetNodeReference("ReferenceToFrameTransform") and self._parameterNode.GetNodeReference("ReferenceVolume"))
         self.transformReferenceVolumeButton.setChecked(self._parameterNode.GetNodeReference("ReferenceVolume") and self._parameterNode.GetNodeReference("ReferenceVolume").GetTransformNodeID() is not None)
 
-        # # Update node selectors and sliders
-        # self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputVolume"))
-        # self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputVolume"))
-        # self.ui.invertedOutputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputVolumeInverse"))
-        # self.ui.imageThresholdSliderWidget.value = float(self._parameterNode.GetParameter("Threshold"))
-        # self.ui.invertOutputCheckBox.checked = (self._parameterNode.GetParameter("Invert") == "true")
-
-        # # Update buttons states and tooltips
-        # if self._parameterNode.GetNodeReference("InputVolume") and self._parameterNode.GetNodeReference("OutputVolume"):
-        #     self.ui.applyButton.toolTip = "Compute output volume"
-        #     self.ui.applyButton.enabled = True
-        # else:
-        #     self.ui.applyButton.toolTip = "Select input and output volume nodes"
-        #     self.ui.applyButton.enabled = False
-
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
 
@@ -498,13 +484,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if self.ui.referenceVolumeNodeComboBox.currentNodeID != "":
             slicer.util.getNode(self.ui.referenceVolumeNodeComboBox.currentNodeID).SetAndObserveTransformNodeID(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID if self.transformReferenceVolumeButton.checked else None)
 
-        # self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
-        # self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
-        # self._parameterNode.SetParameter("Threshold", str(self.ui.imageThresholdSliderWidget.value))
-        # self._parameterNode.SetParameter("Invert", "true" if self.ui.invertOutputCheckBox.checked else "false")
-        # self._parameterNode.SetNodeReferenceID("OutputVolumeInverse", self.ui.invertedOutputSelector.currentNodeID)
-
-
         self._parameterNode.EndModify(wasModified)
 
 
@@ -518,6 +497,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         for name, widget in self.trajectoryCoordinateWidgets.items():
              trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
 
+    def setTransformableWidgetsState(self, state):           
+        for widget in self.trajectoryCoordinateWidgets.values():
+            widget.transformButton.setChecked(state)
+        for widget in self.referenceToFrameCoordinateWidgets.values():
+            if isinstance(widget, TransformableCoordinatesWidget):
+                widget.transformButton.setChecked(state)
+        self.transformReferenceVolumeButton.setChecked(state)
 
     def onCalculateReferenceToFrame(self):
         if self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Align':
@@ -666,6 +652,8 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("Trajectories", json.dumps([]))
         if not parameterNode.GetParameter("TrajectoryIndex"):
             parameterNode.SetParameter("TrajectoryIndex", "")
+        if not parameterNode.GetParameter("TransformableWidgetsChecked"):
+            parameterNode.SetParameter("TransformableWidgetsChecked", "0")
 
 
     def runFiducialRegistration(self, outputTransform, sourceCoords, targetCoords):

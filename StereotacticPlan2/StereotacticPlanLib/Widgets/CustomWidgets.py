@@ -125,7 +125,7 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.markupsNode.SetNthControlPointVisibility(self.markupsNodeControlPointIndex, active)
         if active:
             markupsLogic = slicer.modules.markups.logic()
-            markupsLogic.JumpSlicesToNthPointInMarkup(self.markupsNode.GetID(), self.markupsNodeControlPointIndex, True)
+            markupsLogic.JumpSlicesToNthPointInMarkup(self.markupsNode.GetID(), self.markupsNodeControlPointIndex, False)
 
     def onPlaceToggled(self, active):
         if active:
@@ -146,8 +146,8 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
 
 class TransformableCoordinatesWidget(CustomCoordinatesWidget):
-
-    def __init__(self, auxFolderID, name):
+    
+    def __init__(self, auxFolderID, name, setTransformableWidgetsState):
         super().__init__(auxFolderID, name)
 
         self._transformNodeID = None
@@ -155,8 +155,9 @@ class TransformableCoordinatesWidget(CustomCoordinatesWidget):
         transformAction = qt.QAction(self)
         transformAction.setIcon(qt.QIcon(":/Icons/Transforms.png"))
         transformAction.setCheckable(True)
-        transformAction.connect("toggled(bool)", self.onTransformToggled)
         self.transformButton.setDefaultAction(transformAction)
+        self.transformButton.connect("toggled(bool)", self.onTransformToggled)
+        self.transformButton.connect("toggled(bool)", setTransformableWidgetsState)
 
     def setTransformNodeID(self, nodeID):
         if self._transformNodeID and self._transformObserver is not None:
@@ -170,8 +171,9 @@ class TransformableCoordinatesWidget(CustomCoordinatesWidget):
             self.onTransformToggled(self.transformButton.checked)
             self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
             
-    def onTransformToggled(self, enabled):
-        if enabled:
+    def onTransformToggled(self, state):
+        # self.transformButton.checked = state
+        if state:
             self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID)
         else:
             self.markupsNode.SetAndObserveTransformNodeID(None)
