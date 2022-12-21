@@ -29,11 +29,11 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   # trajectories
   trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
   brainlab_trajectory = {}
-  brainlab_trajectory['Name'] = 'trajectory from Brianlab'
+  brainlab_trajectory['Name'] = stereotaxyReport.getTrajectoryInformation()['Name']
   brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
-  if importInFrameSpace: # TODO
-    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
-    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'  
+  if importInFrameSpace:
+    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ'
+    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'Headring') + ';XYZ'  
   else:
     brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
     brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'
@@ -139,16 +139,22 @@ class StereotaxyReport():
   def getCoordinates(self, queryPoint, queryCoordinateSystem):
     # define crop bounding box and transform to RAS
     if queryCoordinateSystem == 'Headring':
-      cropBoundingBox = (0, self.pdfHeight * 0.57 , self.pdfWidth/2, self.pdfHeight * 0.85)     
+      if queryPoint in ['Entry', 'Target']:
+        PDFPage = 0
+        cropBoundingBox = (0, 350 , self.pdfWidth, 395)
+      elif queryPoint in ['AC', 'PC', 'MS']:
+        PDFPage = 1
+        cropBoundingBox = (0, self.pdfHeight * 0.57 , self.pdfWidth/2, self.pdfHeight * 0.85)
     elif queryCoordinateSystem == 'DICOM':
+      PDFPage = 1
       cropBoundingBox = (self.pdfWidth/2, self.pdfHeight * 0.57 , self.pdfWidth, self.pdfHeight * 0.85)
     else:
       raise RuntimeError('Invalid queryCoordinateSystem: ' + queryCoordinateSystem)
     # extract text
-    PDFText = self.pdf.pages[1].crop(cropBoundingBox).extract_text()
+    PDFText = self.pdf.pages[PDFPage].crop(cropBoundingBox).extract_text()
     # extract coords
     queryPoint = queryPoint + ' Point' if queryPoint in ['AC','PC','MS'] else queryPoint
-    m = re.search('(?<=' + queryPoint + ')' + r' [-]?\d+[.]\d+ mm' * 3, PDFText)
+    m = re.search('(?<=' + queryPoint + ')' + r'\s+[-]?\d+[.]\d+ mm' * 3, PDFText)
     xyz_str = m.group(0).split('mm')
     xyz_flt = [float(x) for x in xyz_str[:-1]]
     # transform
