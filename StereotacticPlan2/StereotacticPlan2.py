@@ -313,20 +313,20 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
     def trajectoryChanged(self, currentText):
         if currentText == 'Select...':
-            self._parameterNode.SetParameter("TrajectoryIndex", "")
+            self._parameterNode.SetParameter("TrajectoryIndex", "-1")
             return
         elif currentText == 'Create new trajectory as':
             self.createNewTrajectory()
         elif currentText.startswith('Import from'):
             self.importTrajectoryFrom(currentText.removeprefix('Import from '))
-            self.ui.trajectoryComboBox.setCurrentText('Select...')
+            self.updateGUIFromParameterNode() # update if modified or not
         elif currentText == 'Delete current trajectory':
             self.deleteCurrentTrajectory()
             self.ui.trajectoryComboBox.setCurrentText('Select...')
         else:
             trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
             trajectoryNames = [trajectory['Name'] for trajectory in trajectories]
-            trajectoryIndex = str(trajectoryNames.index(currentText)) if currentText in trajectoryNames else ""
+            trajectoryIndex = str(trajectoryNames.index(currentText)) if currentText in trajectoryNames else "-1"
             self._parameterNode.SetParameter("TrajectoryIndex", trajectoryIndex)
         
     def createNewTrajectory(self):
@@ -352,14 +352,14 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
     def deleteCurrentTrajectory(self):
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = self._parameterNode.GetParameter("TrajectoryIndex")
-        if trajectories and trajectoryIndex:
-            trajectories.pop(int(trajectoryIndex))
+        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
+        if trajectories and (trajectoryIndex>=0):
+            trajectories.pop(trajectoryIndex)
         else:
             return
         wasModified = self._parameterNode.StartModify() 
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
-        self._parameterNode.SetParameter("TrajectoryIndex", "")
+        self._parameterNode.SetParameter("TrajectoryIndex", "-1")
         self._parameterNode.EndModify(wasModified)
 
     def importTrajectoryFrom(self, importer):
@@ -395,11 +395,11 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self._updatingGUIFromParameterNode = True
 
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = self._parameterNode.GetParameter("TrajectoryIndex")
-
+        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
+        
         self.updateTrajectoriesComboBox([trajectory['Name'] for trajectory in trajectories])
 
-        currentTrajectoryAvailable = trajectories and trajectoryIndex
+        currentTrajectoryAvailable = trajectories and (trajectoryIndex>=0)
 
         self.ui.trajectoryModeComboBox.setEnabled(currentTrajectoryAvailable)
         self.ui.mountingComboBox.setEnabled(currentTrajectoryAvailable)
@@ -409,7 +409,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.trajectoryTransformNodeComboBox.setEnabled(currentTrajectoryAvailable)
 
         if currentTrajectoryAvailable:
-            currentTrajectory = trajectories[int(trajectoryIndex)]
+            currentTrajectory = trajectories[trajectoryIndex]
             self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
             self.ui.trajectoryModeComboBox.setCurrentText(currentTrajectory['Mode'])
             self.ui.mountingComboBox.setCurrentText(currentTrajectory['Mounting'])
@@ -462,10 +462,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = self._parameterNode.GetParameter("TrajectoryIndex")
+        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
 
-        if trajectories and trajectoryIndex:
-            currentTrajectory = trajectories[int(trajectoryIndex)]
+        if trajectories and (trajectoryIndex>=0):
+            currentTrajectory = trajectories[trajectoryIndex]
             currentTrajectory['Mode'] = self.ui.trajectoryModeComboBox.currentText
             currentTrajectory['Mounting'] = self.ui.mountingComboBox.currentText
             currentTrajectory['Ring'] = self.ui.ringAngleSliderWidget.value
@@ -651,7 +651,7 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("Trajectories"):
             parameterNode.SetParameter("Trajectories", json.dumps([]))
         if not parameterNode.GetParameter("TrajectoryIndex"):
-            parameterNode.SetParameter("TrajectoryIndex", "")
+            parameterNode.SetParameter("TrajectoryIndex", "-1")
         if not parameterNode.GetParameter("TransformableWidgetsChecked"):
             parameterNode.SetParameter("TransformableWidgetsChecked", "0")
 

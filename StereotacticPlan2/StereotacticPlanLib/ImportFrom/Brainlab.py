@@ -4,9 +4,29 @@ import re
 import json
 
 def setParameterNodeFromDevice(parameterNode, filePath=None):
-  filePath = qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf') if filePath is None else filePath
-  if filePath == '':
+
+  dialog = qt.QDialog()
+  dialog.setWindowTitle('Brainlab Import Options')
+  form = qt.QFormLayout(dialog)
+
+  planningPDFButton = qt.QPushButton('Click to select')
+  planningPDFButton.clicked.connect(lambda: planningPDFButton.setText(qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf')))
+  form.addRow('Planning PDF: ', planningPDFButton)
+
+  buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
+  form.addRow(buttonBox)
+  buttonBox.accepted.connect(lambda: dialog.accept())
+  buttonBox.rejected.connect(lambda: dialog.reject())
+
+  if dialog.exec() == qt.QDialog.Accepted:
+    dialogAccepted = True
+    filePath = planningPDFButton.text
+  else:
+    dialogAccepted = False
+
+  if not dialogAccepted or not filePath:
     return
+
   # get planning
   stereotaxyReport = StereotaxyReport(filePath)
   planningDictionary = stereotaxyReport.getArcSettings()
