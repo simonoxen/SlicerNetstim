@@ -3,28 +3,15 @@ import numpy as np
 import re
 import json
 
-def setParameterNodeFromDevice(parameterNode, filePath=None):
+def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False):
 
-  dialog = qt.QDialog()
-  dialog.setWindowTitle('Brainlab Import Options')
-  form = qt.QFormLayout(dialog)
-
-  planningPDFButton = qt.QPushButton('Click to select')
-  planningPDFButton.clicked.connect(lambda: planningPDFButton.setText(qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf')))
-  form.addRow('Planning PDF: ', planningPDFButton)
-
-  buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
-  form.addRow(buttonBox)
-  buttonBox.accepted.connect(lambda: dialog.accept())
-  buttonBox.rejected.connect(lambda: dialog.reject())
-
-  if dialog.exec() == qt.QDialog.Accepted:
-    dialogAccepted = True
-    filePath = planningPDFButton.text
+  if filePath is None:
+    filePath, computeReferenceToFrame, importACPCC = getOptionsFromDialog(importInFrameSpace)
   else:
-    dialogAccepted = False
+    computeReferenceToFrame = True
+    importACPCC = True
 
-  if not dialogAccepted or not filePath:
+  if filePath is None:
     return
 
   # get planning
@@ -32,20 +19,24 @@ def setParameterNodeFromDevice(parameterNode, filePath=None):
   planningDictionary = stereotaxyReport.getArcSettings()
   
   wasModified = parameterNode.StartModify()
-  # ACPC
-  parameterNode.SetParameter("Frame AC", stereotaxyReport.getCoordinates('AC', 'Headring') + ';XYZ')
-  parameterNode.SetParameter("Frame PC", stereotaxyReport.getCoordinates('PC', 'Headring') + ';XYZ')
-  parameterNode.SetParameter("Frame MS", stereotaxyReport.getCoordinates('MS', 'Headring') + ';XYZ')
-  parameterNode.SetParameter("Reference AC", stereotaxyReport.getCoordinates('AC', 'DICOM') + ';RAS')
-  parameterNode.SetParameter("Reference PC", stereotaxyReport.getCoordinates('PC', 'DICOM') + ';RAS')
-  parameterNode.SetParameter("Reference MS", stereotaxyReport.getCoordinates('MS', 'DICOM') + ';RAS')
+  if importACPCC:
+    parameterNode.SetParameter("Frame AC", stereotaxyReport.getCoordinates('AC', 'Headring') + ';XYZ')
+    parameterNode.SetParameter("Frame PC", stereotaxyReport.getCoordinates('PC', 'Headring') + ';XYZ')
+    parameterNode.SetParameter("Frame MS", stereotaxyReport.getCoordinates('MS', 'Headring') + ';XYZ')
+    parameterNode.SetParameter("Reference AC", stereotaxyReport.getCoordinates('AC', 'DICOM') + ';RAS')
+    parameterNode.SetParameter("Reference PC", stereotaxyReport.getCoordinates('PC', 'DICOM') + ';RAS')
+    parameterNode.SetParameter("Reference MS", stereotaxyReport.getCoordinates('MS', 'DICOM') + ';RAS')
   # trajectories
   trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
   brainlab_trajectory = {}
   brainlab_trajectory['Name'] = 'trajectory from Brianlab'
   brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
-  brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
-  brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'
+  if importInFrameSpace: # TODO
+    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
+    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'  
+  else:
+    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
+    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'
   brainlab_trajectory['Mounting'] = planningDictionary["Mounting"]
   brainlab_trajectory['Arc'] = float(planningDictionary["Arc Angle"])
   brainlab_trajectory['Ring'] = float(planningDictionary["Ring Angle"])
@@ -56,25 +47,37 @@ def setParameterNodeFromDevice(parameterNode, filePath=None):
   parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
   parameterNode.EndModify(wasModified)
 
-  # # frame fiducials
-  # frameFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','FrameFid')
-  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'Headring'), 'frameAC')
-  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'Headring'), 'framePC')
-  # frameFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'Headring'), 'frameMS')
-  # # anat fiducials
-  # referenceFidNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode','ReferenceFid')
-  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('AC', 'DICOM'), 'anatAC')
-  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('PC', 'DICOM'), 'anatPC')
-  # referenceFidNode.AddFiducialFromArray(stereotaxyReport.getCoordinates('MS', 'DICOM'), 'anatMS')
-  # # set values
-  # wasModified = parameterNode.StartModify()
-  # parameterNode.SetParameter("ArcAngle", planningDictionary["Arc Angle"])
-  # parameterNode.SetParameter("RingAngle", planningDictionary["Ring Angle"])
-  # parameterNode.SetParameter("FrameTargetCoordinates", planningDictionary["Headring Coordinates"])
-  # parameterNode.SetParameter("Mounting", planningDictionary["Mounting"])
-  # parameterNode.SetNodeReferenceID("ReferenceACPCMSMarkups", referenceFidNode.GetID())
-  # parameterNode.SetNodeReferenceID("FrameACPCMSMarkups", frameFidNode.GetID())
-  # parameterNode.SetParameter("ApplyXYZToRAS", "1")
+def getOptionsFromDialog(importInFrameSpace):
+  dialog = qt.QDialog()
+  dialog.setWindowTitle('Brainlab Import Options')
+
+  planningPDFButton = qt.QPushButton('Click to select')
+  planningPDFButton.clicked.connect(lambda: planningPDFButton.setText(qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select Planning PDF', '', '*.pdf')))
+
+  computeReferenceToFrameCheckBox = qt.QCheckBox()
+  computeReferenceToFrameCheckBox.setEnabled(False)
+
+  importACPCCheckBox = qt.QCheckBox()
+  importACPCCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
+
+  buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
+  buttonBox.accepted.connect(lambda: dialog.accept())
+  buttonBox.rejected.connect(lambda: dialog.reject())
+
+  form = qt.QFormLayout(dialog)
+  form.addRow('Planning PDF: ', planningPDFButton)
+  if not importInFrameSpace:
+    form.addRow('Import ACPC coords: ', importACPCCheckBox)
+    form.addRow('Compute reference to frame transform: ', computeReferenceToFrameCheckBox)
+  form.addRow(buttonBox)
+
+  if dialog.exec() == qt.QDialog.Accepted:
+    return  planningPDFButton.text,\
+            computeReferenceToFrameCheckBox.checked,\
+            importACPCCheckBox.checked
+  else:
+    return None, None, None
+
 class StereotaxyReport():
 
   def __init__(self, PDFPath):

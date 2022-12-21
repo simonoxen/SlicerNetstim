@@ -370,7 +370,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         importerModule = getattr(StereotacticPlanLib.ImportFrom, importer)
         # Modify all properties in a single batch
         wasModified = self._parameterNode.StartModify()  
-        importerModule.setParameterNodeFromDevice(self._parameterNode)
+        importerModule.setParameterNodeFromDevice(self._parameterNode, filePath=None, importInFrameSpace=self.transformReferenceVolumeButton.checked)
         self._parameterNode.EndModify(wasModified)
 
     def updateTrajectoriesComboBox(self, trajectoryNames=None):
@@ -396,7 +396,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
         trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
-        
+
         self.updateTrajectoriesComboBox([trajectory['Name'] for trajectory in trajectories])
 
         currentTrajectoryAvailable = trajectories and (trajectoryIndex>=0)
