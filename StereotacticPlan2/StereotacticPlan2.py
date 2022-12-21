@@ -445,7 +445,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
 
         self.transformReferenceVolumeButton.setEnabled(self._parameterNode.GetNodeReference("ReferenceToFrameTransform") and self._parameterNode.GetNodeReference("ReferenceVolume"))
-        self.transformReferenceVolumeButton.setChecked(self._parameterNode.GetNodeReference("ReferenceVolume") and self._parameterNode.GetNodeReference("ReferenceVolume").GetTransformNodeID() is not None)
 
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
