@@ -6,10 +6,10 @@ import json
 def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False):
 
   if filePath is None:
-    filePath, computeReferenceToFrame, importACPCC = getOptionsFromDialog(importInFrameSpace)
+    filePath, computeReferenceToFrame, importACPC = getOptionsFromDialog(importInFrameSpace)
   else:
     computeReferenceToFrame = True
-    importACPCC = True
+    importACPC = True
 
   if filePath is None:
     return
@@ -19,7 +19,7 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   planningDictionary = stereotaxyReport.getArcSettings()
   
   wasModified = parameterNode.StartModify()
-  if importACPCC:
+  if importACPC:
     parameterNode.SetParameter("Frame AC", stereotaxyReport.getCoordinates('AC', 'Headring') + ';XYZ')
     parameterNode.SetParameter("Frame PC", stereotaxyReport.getCoordinates('PC', 'Headring') + ';XYZ')
     parameterNode.SetParameter("Frame MS", stereotaxyReport.getCoordinates('MS', 'Headring') + ';XYZ')
@@ -57,8 +57,8 @@ def getOptionsFromDialog(importInFrameSpace):
   computeReferenceToFrameCheckBox = qt.QCheckBox()
   computeReferenceToFrameCheckBox.setEnabled(False)
 
-  importACPCCheckBox = qt.QCheckBox()
-  importACPCCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
+  importACPCheckBox = qt.QCheckBox()
+  importACPCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
 
   buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
   buttonBox.accepted.connect(lambda: dialog.accept())
@@ -67,14 +67,14 @@ def getOptionsFromDialog(importInFrameSpace):
   form = qt.QFormLayout(dialog)
   form.addRow('Planning PDF: ', planningPDFButton)
   if not importInFrameSpace:
-    form.addRow('Import ACPC coords: ', importACPCCheckBox)
+    form.addRow('Import ACPC coords: ', importACPCheckBox)
     form.addRow('Compute reference to frame transform: ', computeReferenceToFrameCheckBox)
   form.addRow(buttonBox)
 
   if dialog.exec() == qt.QDialog.Accepted:
     return  planningPDFButton.text,\
             computeReferenceToFrameCheckBox.checked,\
-            importACPCCheckBox.checked
+            importACPCheckBox.checked
   else:
     return None, None, None
 
