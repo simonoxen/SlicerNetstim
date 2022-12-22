@@ -206,6 +206,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.mountingComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
+        self.ui.referenceToFrameModeComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
 
         # Buttons
         self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
@@ -445,6 +446,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
 
         self.transformReferenceVolumeButton.setEnabled(self._parameterNode.GetNodeReference("ReferenceToFrameTransform") and self._parameterNode.GetNodeReference("ReferenceVolume"))
+        self.ui.referenceToFrameModeComboBox.currentText = self._parameterNode.GetParameter("ReferenceToFrameMode")
 
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
@@ -482,6 +484,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         if self.ui.referenceVolumeNodeComboBox.currentNodeID != "":
             slicer.util.getNode(self.ui.referenceVolumeNodeComboBox.currentNodeID).SetAndObserveTransformNodeID(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID if self.transformReferenceVolumeButton.checked else None)
+
+        self._parameterNode.SetParameter("ReferenceToFrameMode", self.ui.referenceToFrameModeComboBox.currentText)
 
         self._parameterNode.EndModify(wasModified)
 
@@ -653,7 +657,22 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("TrajectoryIndex", "-1")
         if not parameterNode.GetParameter("TransformableWidgetsChecked"):
             parameterNode.SetParameter("TransformableWidgetsChecked", "0")
+        if not parameterNode.GetParameter("ReferenceToFrameMode"):
+             parameterNode.SetParameter("ReferenceToFrameMode","ACPC Align")
 
+    def transformCoordsFromXYZToRAS(self, coords):
+        return  np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
+
+    def transformCoordsFromRASToXYZ(self, coords):
+        return np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(coords, 1))[:3]
+
+    def getFrameXYZToRASTransform(self):
+        # Headring coordinates to Slicer world (matching center)
+        frameToRAS = np.array([[ -1,  0,  0,  100],
+                                [  0,  1,  0, -100],
+                                [  0,  0, -1,  100],
+                                [  0,  0,  0,    1]])
+        return frameToRAS                       
 
     def runFiducialRegistration(self, outputTransform, sourceCoords, targetCoords):
         auxSourceNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode')

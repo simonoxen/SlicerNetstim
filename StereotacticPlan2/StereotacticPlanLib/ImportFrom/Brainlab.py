@@ -2,6 +2,7 @@ import qt, slicer
 import numpy as np
 import re
 import json
+import StereotacticPlan2
 
 def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False):
 
@@ -14,11 +15,13 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   if filePath is None:
     return
 
-  # get planning
   stereotaxyReport = StereotaxyReport(filePath)
   planningDictionary = stereotaxyReport.getArcSettings()
   
+  logic = StereotacticPlan2.StereotacticPlan2Logic()
+
   wasModified = parameterNode.StartModify()
+
   if importACPC:
     parameterNode.SetParameter("Frame AC", stereotaxyReport.getCoordinates('AC', 'Headring') + ';XYZ')
     parameterNode.SetParameter("Frame PC", stereotaxyReport.getCoordinates('PC', 'Headring') + ';XYZ')
@@ -26,8 +29,15 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
     parameterNode.SetParameter("Reference AC", stereotaxyReport.getCoordinates('AC', 'DICOM') + ';RAS')
     parameterNode.SetParameter("Reference PC", stereotaxyReport.getCoordinates('PC', 'DICOM') + ';RAS')
     parameterNode.SetParameter("Reference MS", stereotaxyReport.getCoordinates('MS', 'DICOM') + ';RAS')
-  # trajectories
-  trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
+    parameterNode.SetParameter("ReferenceToFrameMode", "ACPC Register")
+
+  if computeReferenceToFrame:
+    referenceToFrameNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Reference To Frame")
+    sourceCoordinates = [np.fromstring(stereotaxyReport.getCoordinates(x, 'DICOM'), dtype=float, sep=',') for x in ['AC', 'PC', 'MS']]
+    targetCoordinates = [logic.transformCoordsFromXYZToRAS(np.fromstring(stereotaxyReport.getCoordinates(x, 'Headring'), dtype=float, sep=',')) for x in ['AC', 'PC', 'MS']]
+    logic.runFiducialRegistration(referenceToFrameNode, sourceCoordinates, targetCoordinates)
+    parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", referenceToFrameNode.GetID())
+
   brainlab_trajectory = {}
   brainlab_trajectory['Name'] = stereotaxyReport.getTrajectoryInformation()['Name']
   brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
@@ -42,9 +52,12 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   brainlab_trajectory['Ring'] = float(planningDictionary["Ring Angle"])
   brainlab_trajectory['Roll'] = 0
   brainlab_trajectory['OutputTransformID'] = ''
+
+  trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
   trajectories.append(brainlab_trajectory)
   parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
   parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
+
   parameterNode.EndModify(wasModified)
 
 def getOptionsFromDialog(importInFrameSpace):

@@ -3,6 +3,7 @@ import ctk
 import qt
 import numpy as np
 import vtk
+import StereotacticPlan2
 class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def __init__(self, auxFolderID, name):
@@ -12,6 +13,7 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
         self._transformObserver = None
+        self._logic = StereotacticPlan2.StereotacticPlan2Logic()
 
         self.systemComboBox = qt.QComboBox(self)
         self.systemComboBox.addItems(['RAS', 'XYZ'])
@@ -75,7 +77,7 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         coords = np.zeros(3)
         self.markupsNode.GetNthControlPointPositionWorld(self.markupsNodeControlPointIndex, coords)
         if self.systemComboBox.currentText == 'XYZ':
-            coords = self.transformCoordsFromRASToXYZ(coords)
+            coords = self._logic.transformCoordsFromRASToXYZ(coords)
         self.setNumpyCoordinates(coords)
 
     def updateMarkupsNodeFromCoordinates(self):
@@ -88,9 +90,9 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def onSystemChanged(self, system):
         if system == 'RAS':
-            coords =  self.transformCoordsFromXYZToRAS(self.getNumpyCoordinates())
+            coords =  self._logic.transformCoordsFromXYZToRAS(self.getNumpyCoordinates())
         elif system == 'XYZ':
-            coords = self.transformCoordsFromRASToXYZ(self.getNumpyCoordinates())
+            coords = self._logic.transformCoordsFromRASToXYZ(self.getNumpyCoordinates())
         self.setNumpyCoordinates(coords)
 
     def getNumpyCoordinates(self, system=None):
@@ -98,28 +100,14 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         if (system is None) or (system == self.getSystem()):
             return coords
         elif system == 'RAS':
-            return self.transformCoordsFromXYZToRAS(coords)
+            return self._logic.transformCoordsFromXYZToRAS(coords)
         elif system == 'XYZ':
-            return self.transformCoordsFromRASToXYZ(coords)
+            return self._logic.transformCoordsFromRASToXYZ(coords)
         else:
             raise RuntimeError('Unknown system: ' + system)
 
     def setNumpyCoordinates(self, coords):
         self.coordinates = ','.join([str(x) for x in coords])
-
-    def transformCoordsFromXYZToRAS(self, coords):
-        return  np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
-
-    def transformCoordsFromRASToXYZ(self, coords):
-        return np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(coords, 1))[:3]
-
-    def getFrameXYZToRASTransform(self):
-        # Headring coordinates to Slicer world (matching center)
-        frameToRAS = np.array([[ -1,  0,  0,  100],
-                                [  0,  1,  0, -100],
-                                [  0,  0, -1,  100],
-                                [  0,  0,  0,    1]])
-        return frameToRAS                       
 
     def onViewClicked(self, active):
         self.markupsNode.SetNthControlPointVisibility(self.markupsNodeControlPointIndex, active)
