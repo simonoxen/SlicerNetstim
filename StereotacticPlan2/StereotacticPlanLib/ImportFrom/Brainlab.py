@@ -2,15 +2,19 @@ import qt, slicer
 import numpy as np
 import re
 import json
+from datetime import datetime
+from DICOMLib import DICOMUtils
+import pydicom as dicom
 import StereotacticPlan2
 
-def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False):
+def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False, DICOMdir=None):
 
   if filePath is None:
-    filePath, computeReferenceToFrame, importACPC = getOptionsFromDialog(importInFrameSpace)
+    filePath, computeReferenceToFrame, importACPC, importDICOM, DICOMdir = getOptionsFromDialog(importInFrameSpace)
   else:
     computeReferenceToFrame = True
     importACPC = True
+    importDICOM = True if DICOMdir is not None else False
 
   if filePath is None:
     return
@@ -53,12 +57,74 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   brainlab_trajectory['Roll'] = 0
   brainlab_trajectory['OutputTransformID'] = ''
 
+  if importDICOM:
+    DICOMinfo = stereotaxyReport.getDICOMInformation()
+    rawAnatVolumeNode = getImageFromDICOMInformation(DICOMinfo, DICOMdir)
+    parameterNode.SetNodeReferenceID("ReferenceVolume", rawAnatVolumeNode.GetID())
+
   trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
   trajectories.append(brainlab_trajectory)
   parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
   parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
 
   parameterNode.EndModify(wasModified)
+
+
+def getImageFromDICOMInformation(dcmInfo, dcmDir):
+  loadedNodeIDs = []
+  with DICOMUtils.TemporaryDICOMDatabase() as database:
+    DICOMUtils.importDicom(dcmDir, database)
+    series = SlicerDICOMDatabase().getSeriestMatchingDescriptionAndDateTime(dcmInfo['SeriesDescription'], dcmInfo['AcquisitionDateTime'])
+    loadedNodeIDs.extend(DICOMUtils.loadSeriesByUID([series]))
+
+  for nodeID in loadedNodeIDs[::-1]:
+    volumeNode = slicer.util.getNode(nodeID)
+    if re.search('.*' + dcmInfo['SeriesDescription'] + '.*', volumeNode.GetName()):
+      return volumeNode
+
+  raise RuntimeError('Unable to find image in DICOM')
+
+class SlicerDICOMDatabase():
+
+  def __init__(self):
+      self.db = slicer.dicomDatabase
+
+  def getSeriestMatchingDescriptionAndDateTime(self, descriptionIn, dateTimeIn):
+    for patient in self.db.patients():
+      for study in self.db.studiesForPatient(patient):
+        for series in self.db.seriesForStudy(study):
+          try:
+            seriesDescription = self.getSeriesAcquisitionInformationFromTag(series, 'SeriesDescription')
+            acquisitionDateTime = self.getSeriesAcquisitionInformationFromTag(series, 'AcquisitionDateTime')
+            if not acquisitionDateTime:
+              acquisitionDate = self.getSeriesAcquisitionInformationFromTag(series, 'AcquisitionDate')
+              acquisitionTime = self.getSeriesAcquisitionInformationFromTag(series, 'AcquisitionTime')
+              acquisitionDateTime = acquisitionDate + acquisitionTime
+            dateTime = self.DICOMDateTimeStringToDateTime(acquisitionDateTime)
+          except:
+            continue
+          descriptionMatch = self.seriesDescriptionMatch(seriesDescription, descriptionIn)
+          dateTimeMatch = self.seriesDateTimeMatch(dateTime, dateTimeIn)
+          if descriptionMatch and dateTimeMatch:
+            return series
+
+  def getSeriesAcquisitionInformationFromTag(self, series, tag):
+    fileList = self.db.filesForSeries(series)
+    tagStr = str(dicom.tag.Tag(tag))[1:-1].replace(' ','')
+    return self.db.fileValue(fileList[0],tagStr)
+
+  @staticmethod
+  def DICOMDateTimeStringToDateTime(dateTimeString):
+    return datetime.strptime(dateTimeString, '%Y%m%d%H%M%S.%f')
+
+  @staticmethod
+  def seriesDescriptionMatch(seriesDescriptionA, seriesDescriptionB):
+    return seriesDescriptionA == seriesDescriptionB
+  
+  @staticmethod
+  def seriesDateTimeMatch(seriesDateTimeA, seriesDateTimeB):
+    timeDelta = seriesDateTimeA - seriesDateTimeB
+    return abs(timeDelta.total_seconds()) < 60 # allow 1 min because of different resolutions
 
 def getOptionsFromDialog(importInFrameSpace):
   dialog = qt.QDialog()
@@ -70,8 +136,15 @@ def getOptionsFromDialog(importInFrameSpace):
   computeReferenceToFrameCheckBox = qt.QCheckBox()
   computeReferenceToFrameCheckBox.setEnabled(False)
 
-  importACPCheckBox = qt.QCheckBox()
-  importACPCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
+  importACPCCheckBox = qt.QCheckBox()
+  importACPCCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
+
+  DICOMDirButton = qt.QPushButton('Click to select')
+  DICOMDirButton.clicked.connect(lambda: DICOMDirButton.setText(qt.QFileDialog.getExistingDirectory(qt.QWidget(), 'Select DICOM directory', '')))
+  DICOMDirButton.setEnabled(False)
+
+  importDICOMCheckBox = qt.QCheckBox()
+  importDICOMCheckBox.connect("toggled(bool)", lambda b: DICOMDirButton.setEnabled(b))
 
   buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
   buttonBox.accepted.connect(lambda: dialog.accept())
@@ -80,16 +153,20 @@ def getOptionsFromDialog(importInFrameSpace):
   form = qt.QFormLayout(dialog)
   form.addRow('Planning PDF: ', planningPDFButton)
   if not importInFrameSpace:
-    form.addRow('Import ACPC coords: ', importACPCheckBox)
+    form.addRow('Import ACPC coords: ', importACPCCheckBox)
     form.addRow('Compute reference to frame transform: ', computeReferenceToFrameCheckBox)
+    form.addRow('Import reference image: ', importDICOMCheckBox)
+    form.addRow('DICOM directory: ', DICOMDirButton)
   form.addRow(buttonBox)
 
   if dialog.exec() == qt.QDialog.Accepted:
     return  planningPDFButton.text,\
             computeReferenceToFrameCheckBox.checked,\
-            importACPCheckBox.checked
+            importACPCCheckBox.checked,\
+            importDICOMCheckBox.checked,\
+            DICOMDirButton.text
   else:
-    return None, None, None
+    return None, None, None, None, None
 
 class StereotaxyReport():
 
