@@ -516,11 +516,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             for name in ['Entry', 'Target']:
                 coords, system, inFrameSpace = trajectory[name].split(';')
                 coords = np.fromstring(coords, dtype=float, sep=',')
+                coords = coords if system=='RAS' else self.logic.transformCoordsFromXYZToRAS(coords)
                 inFrameSpace = bool(int(inFrameSpace))
                 if inFrameSpace and not state:
                     coords = self._parameterNode.GetNodeReference("ReferenceToFrameTransform").GetTransformFromParent().TransformFloatPoint(coords)
                 elif not inFrameSpace and state:
                     coords = self._parameterNode.GetNodeReference("ReferenceToFrameTransform").GetTransformToParent().TransformFloatPoint(coords)
+                coords = coords if system=='RAS' else self.logic.transformCoordsFromRASToXYZ(coords)
                 trajectory[name] = '%s;%s;%d' % (','.join([str(x) for x in coords]), system, state)
         self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
 
