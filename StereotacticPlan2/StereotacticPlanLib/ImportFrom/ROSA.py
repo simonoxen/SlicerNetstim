@@ -47,8 +47,8 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
     new_trajectory = {}
     new_trajectory['Name'] = rosa_trajectory['name']
     new_trajectory['Mode'] = 'Target Entry Roll'
-    new_trajectory['Entry'] = rosa_trajectory['entry'] + ';RAS'
-    new_trajectory['Target'] = rosa_trajectory['target'] + ';RAS'
+    new_trajectory['Entry'] = rosa_trajectory['entry'] + ';RAS;0'
+    new_trajectory['Target'] = rosa_trajectory['target'] + ';RAS;0'
     new_trajectory['Mounting'] = 'lateral-left'
     new_trajectory['Arc'] = 90
     new_trajectory['Ring'] = 90

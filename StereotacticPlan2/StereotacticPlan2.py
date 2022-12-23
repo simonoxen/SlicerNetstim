@@ -336,8 +336,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             return
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
         trajectory = {}
-        trajectory['Entry'] = '0,0,0;RAS'
-        trajectory['Target'] = '0,0,0;RAS'
+        trajectory['Entry'] = '0,0,0;RAS;0'
+        trajectory['Target'] = '0,0,0;RAS;0'
         trajectory['Mounting'] = 'lateral-right'
         trajectory['Ring'] = 90
         trajectory['Arc'] = 90
@@ -492,13 +492,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
     def updateCoordinatesWidgetFromTrajectory(self, trajectory):
         for name, widget in self.trajectoryCoordinateWidgets.items():
-            coords, system = trajectory[name].split(';')
+            coords, system, inFrameSpace = trajectory[name].split(';')
             widget.setSystem(system)
             widget.coordinates = coords
 
     def updateTrajectoryFromCoordinatesWidget(self, trajectory):
         for name, widget in self.trajectoryCoordinateWidgets.items():
-             trajectory[name] = '%s;%s' % (widget.coordinates, widget.getSystem())
+             trajectory[name] = '%s;%s;%d' % (widget.coordinates, widget.getSystem(), widget.transformButton.checked)
 
     def setTransformableWidgetsState(self, state):           
         for widget in self.trajectoryCoordinateWidgets.values():
@@ -507,6 +507,22 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             if isinstance(widget, TransformableCoordinatesWidget):
                 widget.transformButton.setChecked(state)
         self.transformReferenceVolumeButton.setChecked(state)
+        # Also update coords from other trajectories
+        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
+        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
+        for i,trajectory in enumerate(trajectories):
+            if i==trajectoryIndex:
+                continue
+            for name in ['Entry', 'Target']:
+                coords, system, inFrameSpace = trajectory[name].split(';')
+                coords = np.fromstring(coords, dtype=float, sep=',')
+                inFrameSpace = bool(int(inFrameSpace))
+                if inFrameSpace and not state:
+                    coords = self._parameterNode.GetNodeReference("ReferenceToFrameTransform").GetTransformFromParent().TransformFloatPoint(coords)
+                elif not inFrameSpace and state:
+                    coords = self._parameterNode.GetNodeReference("ReferenceToFrameTransform").GetTransformToParent().TransformFloatPoint(coords)
+                trajectory[name] = '%s;%s;%d' % (','.join([str(x) for x in coords]), system, state)
+        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
 
     def onCalculateReferenceToFrame(self):
         if self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Align':

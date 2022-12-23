@@ -46,11 +46,11 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   brainlab_trajectory['Name'] = stereotaxyReport.getTrajectoryInformation()['Name']
   brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
   if importInFrameSpace:
-    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ'
-    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'Headring') + ';XYZ'  
+    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ;1'
+    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'Headring') + ';XYZ;1'  
   else:
-    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS'
-    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS'
+    brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS;0'
+    brainlab_trajectory['Target'] = stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS;0'
   brainlab_trajectory['Mounting'] = planningDictionary["Mounting"]
   brainlab_trajectory['Arc'] = float(planningDictionary["Arc Angle"])
   brainlab_trajectory['Ring'] = float(planningDictionary["Ring Angle"])

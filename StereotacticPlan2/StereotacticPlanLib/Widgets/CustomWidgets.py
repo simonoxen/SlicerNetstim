@@ -160,9 +160,7 @@ class TransformableCoordinatesWidget(CustomCoordinatesWidget):
             self._transformObserver = slicer.util.getNode(self._transformNodeID).AddObserver(slicer.vtkMRMLTransformNode.TransformModifiedEvent, self.updateCoordinatesFromMarkupsNode)
             
     def onTransformToggled(self, state):
-        # self.transformButton.checked = state
-        if state:
-            self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID)
-        else:
-            self.markupsNode.SetAndObserveTransformNodeID(None)
+        self.markupsNode.SetAndObserveTransformNodeID(self._transformNodeID if state else None)
         self.updateCoordinatesFromMarkupsNode()
+    
+        
