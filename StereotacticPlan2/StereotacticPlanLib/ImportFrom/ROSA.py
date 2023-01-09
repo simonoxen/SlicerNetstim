@@ -1,10 +1,7 @@
-import sys, os
-import glob
 import qt
 import re
 import slicer
 from DICOMLib import DICOMUtils
-import vtk
 import numpy as np
 import json
 
