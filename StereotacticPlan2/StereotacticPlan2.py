@@ -125,10 +125,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.resliceDriverToolButton.setFixedSize(buttonSize, buttonSize)
 
         importFromActionGroup = qt.QActionGroup(self.ui.importFromToolButton)
-        importFromOptions = [os.path.basename(g).replace('.py','') for g in glob.glob(os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib', 'ImportFrom', '*.py'))]
-        importFromOptions.remove('__init__')
+        importFromOptions = [os.path.basename(g).replace('.py','') for g in glob.glob(os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib', 'ImportFrom', 'Import_From_*.py'))]
         for option in importFromOptions:
-            importAction = qt.QAction('Import from ' + option, self.ui.importFromToolButton)
+            importAction = qt.QAction(option.replace('_',' '), self.ui.importFromToolButton)
             importAction.triggered.connect(lambda b,o=option: self.importTrajectoryFrom(o))
             importFromActionGroup.addAction(importAction)
         importFromMenu = qt.QMenu(self.ui.importFromToolButton)
@@ -279,15 +278,28 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                 trajectoryNodesIDs.append(node.GetID())
         return trajectoryNodesIDs
 
-    def importTrajectoryFrom(self, importer):
+    def importTrajectoryFrom(self, importerName):
         # Get importer module
         import StereotacticPlanLib.ImportFrom
         import importlib
-        importlib.import_module('.'.join(['StereotacticPlanLib', 'ImportFrom', importer]))
-        importerModule = getattr(StereotacticPlanLib.ImportFrom, importer)
-        # Modify all properties in a single batch
-        wasModified = self._parameterNode.StartModify()  
-        importerModule.setParameterNodeFromDevice(self._parameterNode, filePath=None, importInFrameSpace=self.transformReferenceVolumeButton.checked)
+        importlib.import_module('.'.join(['StereotacticPlanLib', 'ImportFrom', importerName]))
+        importerModule = getattr(StereotacticPlanLib.ImportFrom, importerName)
+        dialog = importerModule.ImporterDialog()
+        dialog.run()
+        if dialog.selectedFile is None:
+            return
+        wasModified = self._parameterNode.StartModify()
+        importer = importerModule.Importer(dialog.selectedFile)
+        if dialog.importACPCCoordinates:
+            importer.setACPCCoordinatesToParameterNode(self._parameterNode)
+        if dialog.computeReferenceToFrame:
+            node = importer.getReferenceToFrameTransform()
+            self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", node.GetID())
+        if dialog.importDICOM:
+            node = importer.getReferenceVolumeFromDICOM(dialog.DICOMDir)
+            self._parameterNode.SetNodeReferenceID("ReferenceVolume", node.GetID())
+        loadedNodeIDs = importer.getTrajectoryTransforms(dialog.importInReferenceSpace)
+        self._parameterNode.SetNodeReferenceID("CurrentTrajectoryTransform", loadedNodeIDs[0])
         self._parameterNode.EndModify(wasModified)
 
     def updateGUIFromParameterNode(self, caller=None, event=None):
@@ -342,6 +354,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
         self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
+        self.ui.trajectoryTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("CurrentTrajectoryTransform"))
 
         self.transformReferenceVolumeButton.setEnabled(self._parameterNode.GetNodeReference("ReferenceToFrameTransform") and self._parameterNode.GetNodeReference("ReferenceVolume"))
         self.ui.referenceToFrameModeComboBox.currentText = self._parameterNode.GetParameter("ReferenceToFrameMode")

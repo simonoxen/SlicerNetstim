@@ -4,6 +4,12 @@ set(MODULE_NAME StereotacticPlan2)
 # -----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
+  StereotacticPlanLib/ImportFrom/Import_From_Brainlab.py
+  StereotacticPlanLib/ImportFrom/Import_From_ROSA.py
+  StereotacticPlanLib/ImportFrom/importerBase.py
+  StereotacticPlanLib/ImportFrom/__init__.py
+  StereotacticPlanLib/Widgets/CustomWidgets.py
+  StereotacticPlanLib/Widgets/__init__.py
 )
 
 set(MODULE_PYTHON_RESOURCES
