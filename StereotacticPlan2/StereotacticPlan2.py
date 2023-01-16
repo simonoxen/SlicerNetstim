@@ -153,10 +153,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
-        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.trajectoryTransformNodeChanged)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", lambda n,w=self.ui.resliceDriverToolButton: self.setDefaultResliceDriver(w.checked))
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updatePreviewLineTransform)
-        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateCurrentTrajectory)
         self.ui.referenceToFrameTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.referenceVolumeNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.trajectoryModeComboBox.connect("currentTextChanged(QString)",  self.updateParameterNodeFromGUI)
@@ -261,35 +260,24 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Initial GUI update
         self.updateGUIFromParameterNode()
 
-    def trajectoryTransformNodeChanged(self, node):
-        nodeID = None if node is None else node.GetID()
-        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectories = [t for t in trajectories if slicer.mrmlScene.GetNodeByID(t['OutputTransformID']) is not None]
-        transformNodeIDs = [t['OutputTransformID'] for t in trajectories]
-        if nodeID in transformNodeIDs:
-            trajectoryIndex = transformNodeIDs.index(node.GetID())
-        elif nodeID:
-            newTrajectory = self.createNewTrajectory(node.GetID())
-            trajectories.append(newTrajectory)
-            trajectoryIndex = len(trajectories)-1
-        else:
-            trajectoryIndex = -1
-        wasModified = self._parameterNode.StartModify() 
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
-        self._parameterNode.SetParameter("TrajectoryIndex", str(trajectoryIndex))
-        self._parameterNode.EndModify(wasModified)
-
     def createNewTrajectory(self, nodeID):
-        trajectory = {}
-        trajectory['Entry'] = '0,0,0;RAS;0'
-        trajectory['Target'] = '0,0,0;RAS;0'
-        trajectory['Mounting'] = 'lateral-right'
-        trajectory['Ring'] = 90
-        trajectory['Arc'] = 90
-        trajectory['Roll'] = 0
-        trajectory['Mode'] = 'Target Mounting Ring Arc'
-        trajectory['OutputTransformID'] = nodeID
-        return trajectory
+        node = slicer.util.getNode(nodeID)
+        node.SetAttribute('NetstimStereotacticPlan', '1')
+        node.SetAttribute('Entry', '0,0,0;RAS;0')
+        node.SetAttribute('Target', '0,0,0;RAS;0')
+        node.SetAttribute('Mounting', 'lateral-right')
+        node.SetAttribute('Ring', '90')
+        node.SetAttribute('Arc', '90')
+        node.SetAttribute('Roll', '0')
+        node.SetAttribute('Mode', 'Target Mounting Ring Arc')
+
+    def getTrajectoryNodesIDsInScene(self):
+        trajectoryNodesIDs = []
+        for i in range(slicer.mrmlScene.GetNumberOfNodesByClass('vtkMRMLLinearTransformNode')):
+            node = slicer.mrmlScene.GetNthNodeByClass(i,'vtkMRMLLinearTransformNode')
+            if 'NetstimStereotacticPlan' in node.GetAttributeNames():
+                trajectoryNodesIDs.append(node.GetID())
+        return trajectoryNodesIDs
 
     def importTrajectoryFrom(self, importer):
         # Get importer module
@@ -314,10 +302,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Make sure GUI changes do not call updateParameterNodeFromGUI (it could cause infinite loop)
         self._updatingGUIFromParameterNode = True
 
-        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
-
-        currentTrajectoryAvailable = trajectories and (trajectoryIndex>=0)
+        currentTrajectoryAvailable = self._parameterNode.GetNodeReference("CurrentTrajectoryTransform") is not None
 
         self.ui.trajectoryModeComboBox.setEnabled(currentTrajectoryAvailable)
         self.ui.mountingComboBox.setEnabled(currentTrajectoryAvailable)
@@ -326,15 +311,15 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.rollAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
 
         if currentTrajectoryAvailable:
-            currentTrajectory = trajectories[trajectoryIndex]
-            self.ui.trajectoryModeComboBox.setCurrentText(currentTrajectory['Mode'])
-            self.ui.mountingComboBox.setCurrentText(currentTrajectory['Mounting'])
-            self.ui.ringAngleSliderWidget.value = currentTrajectory['Ring']
-            self.ui.arcAngleSliderWidget.value = currentTrajectory['Arc']
-            self.ui.rollAngleSliderWidget.value = currentTrajectory['Roll']
-            transformNode = slicer.util.getNode(currentTrajectory['OutputTransformID']) if currentTrajectory['OutputTransformID'] else None
-            self.ui.trajectoryTransformNodeComboBox.setCurrentNode(transformNode)
-            self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
+            node = self._parameterNode.GetNodeReference("CurrentTrajectoryTransform")
+            if node.GetID() not in self.getTrajectoryNodesIDsInScene():
+                self.createNewTrajectory(node.GetID())
+            self.ui.trajectoryModeComboBox.setCurrentText(node.GetAttribute('Mode'))
+            self.ui.mountingComboBox.setCurrentText(node.GetAttribute('Mounting'))
+            self.ui.ringAngleSliderWidget.value = float(node.GetAttribute('Ring'))
+            self.ui.arcAngleSliderWidget.value = float(node.GetAttribute('Arc'))
+            self.ui.rollAngleSliderWidget.value = float(node.GetAttribute('Roll'))
+            self.updateCoordinatesWidgetFromTrajectory(node)
         else:
             self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(None)
 
@@ -351,8 +336,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             widget.setSystem(system)
             widget.coordinates = coords
 
-        self.ui.viewTrajectoryToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
-        self.ui.resliceDriverToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
+        self.ui.viewTrajectoryToolButton.setEnabled(currentTrajectoryAvailable)
+        self.ui.resliceDriverToolButton.setEnabled(currentTrajectoryAvailable)
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
 
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
@@ -363,6 +348,13 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
+
+    def updateCurrentTrajectory(self, caller=None, event=None):
+        if self._parameterNode is None or self._updatingGUIFromParameterNode:
+            return
+        self._parameterNode.SetNodeReferenceID("CurrentTrajectoryTransform", self.ui.trajectoryTransformNodeComboBox.currentNodeID)
+        if self._parameterNode.GetNodeReference("CurrentTrajectoryTransform") is not None:
+            self.onCalculateTrajectory()
 
     def updateParameterNodeFromGUI(self, caller=None, event=None):
         """
@@ -375,23 +367,18 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
-        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
-
-        if trajectories and (trajectoryIndex>=0):
-            currentTrajectory = trajectories[trajectoryIndex]
-            currentTrajectory['Mode'] = self.ui.trajectoryModeComboBox.currentText
-            currentTrajectory['Mounting'] = self.ui.mountingComboBox.currentText
-            currentTrajectory['Ring'] = self.ui.ringAngleSliderWidget.value
-            currentTrajectory['Arc'] = self.ui.arcAngleSliderWidget.value
-            currentTrajectory['Roll'] = self.ui.rollAngleSliderWidget.value
-            currentTrajectory['OutputTransformID'] = self.ui.trajectoryTransformNodeComboBox.currentNodeID
-            self.updateTrajectoryFromCoordinatesWidget(currentTrajectory)
+        if self._parameterNode.GetNodeReference("CurrentTrajectoryTransform") is not None:
+            node = self._parameterNode.GetNodeReference("CurrentTrajectoryTransform")
+            node.SetAttribute('Mode', self.ui.trajectoryModeComboBox.currentText)
+            node.SetAttribute('Mounting', self.ui.mountingComboBox.currentText)
+            node.SetAttribute('Ring', str(self.ui.ringAngleSliderWidget.value))
+            node.SetAttribute('Arc', str(self.ui.arcAngleSliderWidget.value))
+            node.SetAttribute('Roll', str(self.ui.rollAngleSliderWidget.value))
+            self.updateTrajectoryFromCoordinatesWidget(node)
 
         for name, widget in self.referenceToFrameCoordinateWidgets.items():
             self._parameterNode.SetParameter(name, '%s;%s' % (widget.coordinates, widget.getSystem()) )
 
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
         self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", self.ui.referenceToFrameTransformNodeComboBox.currentNodeID)
         self._parameterNode.SetNodeReferenceID("ReferenceVolume", self.ui.referenceVolumeNodeComboBox.currentNodeID)
 
@@ -400,21 +387,21 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self._parameterNode.SetParameter("ReferenceToFrameMode", self.ui.referenceToFrameModeComboBox.currentText)
 
-        if self.ui.trajectoryTransformNodeComboBox.currentNodeID != "":
+        if self._parameterNode.GetNodeReference("CurrentTrajectoryTransform") is not None:
             self.onCalculateTrajectory()
 
         self._parameterNode.EndModify(wasModified)
 
 
-    def updateCoordinatesWidgetFromTrajectory(self, trajectory):
+    def updateCoordinatesWidgetFromTrajectory(self, node):
         for name, widget in self.trajectoryCoordinateWidgets.items():
-            coords, system, inFrameSpace = trajectory[name].split(';')
+            coords, system, inFrameSpace = node.GetAttribute(name).split(';')
             widget.setSystem(system)
             widget.coordinates = coords
 
-    def updateTrajectoryFromCoordinatesWidget(self, trajectory):
+    def updateTrajectoryFromCoordinatesWidget(self, node):
         for name, widget in self.trajectoryCoordinateWidgets.items():
-             trajectory[name] = '%s;%s;%d' % (widget.coordinates, widget.getSystem(), widget.transformButton.checked)
+             node.SetAttribute(name, '%s;%s;%d' % (widget.coordinates, widget.getSystem(), widget.transformButton.checked))
 
     def setTransformableWidgetsState(self, state):           
         for widget in self.trajectoryCoordinateWidgets.values():
@@ -424,13 +411,12 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                 widget.transformButton.setChecked(state)
         self.transformReferenceVolumeButton.setChecked(state)
         # Also update coords from other trajectories
-        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
-        for i,trajectory in enumerate(trajectories):
-            if i==trajectoryIndex:
+        trajectoriesNodesIDs = self.getTrajectoryNodesIDsInScene()
+        for nodeID in trajectoriesNodesIDs:
+            if nodeID == self.ui.trajectoryTransformNodeComboBox.currentNodeID:
                 continue
             for name in ['Entry', 'Target']:
-                coords, system, inFrameSpace = trajectory[name].split(';')
+                coords, system, inFrameSpace = slicer.util.getNode(nodeID).GetAttribute(name).split(';')
                 coords = np.fromstring(coords, dtype=float, sep=',')
                 coords = coords if system=='RAS' else self.logic.transformCoordsFromXYZToRAS(coords)
                 inFrameSpace = bool(int(inFrameSpace))
@@ -439,8 +425,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                 elif not inFrameSpace and state:
                     coords = self._parameterNode.GetNodeReference("ReferenceToFrameTransform").GetTransformToParent().TransformFloatPoint(coords)
                 coords = coords if system=='RAS' else self.logic.transformCoordsFromRASToXYZ(coords)
-                trajectory[name] = '%s;%s;%d' % (','.join([str(x) for x in coords]), system, state)
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
+                slicer.util.getNode(nodeID).SetAttribute(name, '%s;%s;%d' % (','.join([str(x) for x in coords]), system, state))
 
     def onCalculateReferenceToFrame(self):
         if self.ui.referenceToFrameModeComboBox.currentText == 'ACPC Align':
@@ -565,15 +550,15 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         """
         for name in ["Reference AC", "Reference PC", "Reference MS", "Frame AC", "Frame PC", "Frame MS"]:
             if not parameterNode.GetParameter(name):
-                parameterNode.SetParameter(name, "0,0,0;RAS")           
-        if not parameterNode.GetParameter("Trajectories"):
-            parameterNode.SetParameter("Trajectories", json.dumps([]))
+                parameterNode.SetParameter(name, "0,0,0;RAS")
         if not parameterNode.GetParameter("TrajectoryIndex"):
             parameterNode.SetParameter("TrajectoryIndex", "-1")
         if not parameterNode.GetParameter("TransformableWidgetsChecked"):
             parameterNode.SetParameter("TransformableWidgetsChecked", "0")
         if not parameterNode.GetParameter("ReferenceToFrameMode"):
              parameterNode.SetParameter("ReferenceToFrameMode","ACPC Align")
+        if not parameterNode.GetParameter("CurrentTrajectoryTransform"):
+             parameterNode.SetParameter("CurrentTrajectoryTransform","")
 
     def transformCoordsFromXYZToRAS(self, coords):
         return  np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
