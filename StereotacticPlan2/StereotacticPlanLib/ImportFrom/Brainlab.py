@@ -43,7 +43,8 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
     parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", referenceToFrameNode.GetID())
 
   brainlab_trajectory = {}
-  brainlab_trajectory['Name'] = stereotaxyReport.getTrajectoryInformation()['Name']
+  trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Trajectory " + stereotaxyReport.getTrajectoryInformation()['Name'])
+  brainlab_trajectory['OutputTransformID'] = trajectoryTransform.GetID()
   brainlab_trajectory['Mode'] = 'Target Mounting Ring Arc'
   if importInFrameSpace:
     brainlab_trajectory['Entry'] = stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ;1'
@@ -55,7 +56,6 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   brainlab_trajectory['Arc'] = float(planningDictionary["Arc Angle"])
   brainlab_trajectory['Ring'] = float(planningDictionary["Ring Angle"])
   brainlab_trajectory['Roll'] = 0
-  brainlab_trajectory['OutputTransformID'] = ''
 
   if importDICOM:
     DICOMinfo = stereotaxyReport.getDICOMInformation()

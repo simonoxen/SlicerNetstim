@@ -124,7 +124,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
         # Custom Widgets
-        self.updateTrajectoriesComboBox()
         auxFolderID = self.getOrCreateAuxFolderID()
         
         self.trajectoryCoordinateWidgets = {}
@@ -179,6 +178,18 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.resliceDriverToolButton.connect("toggled(bool)", self.setDefaultResliceDriver)
         self.ui.resliceDriverToolButton.setFixedSize(buttonSize, buttonSize)
 
+        importFromActionGroup = qt.QActionGroup(self.ui.importFromToolButton)
+        importFromOptions = [os.path.basename(g).replace('.py','') for g in glob.glob(os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib', 'ImportFrom', '*.py'))]
+        importFromOptions.remove('__init__')
+        for option in importFromOptions:
+            importAction = qt.QAction('Import from ' + option, self.ui.importFromToolButton)
+            importAction.triggered.connect(lambda b,o=option: self.importTrajectoryFrom(o))
+            importFromActionGroup.addAction(importAction)
+        importFromMenu = qt.QMenu(self.ui.importFromToolButton)
+        importFromMenu.addActions(importFromActionGroup.actions())
+        self.ui.importFromToolButton.setMenu(importFromMenu)
+        self.ui.importFromToolButton.setFixedSize(buttonSize, buttonSize)
+
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
         # "setMRMLScene(vtkMRMLScene*)" slot.
@@ -196,6 +207,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
+        self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.trajectoryTransformNodeChanged)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", lambda n,w=self.ui.resliceDriverToolButton: self.setDefaultResliceDriver(w.checked))
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updatePreviewLineTransform)
         self.ui.trajectoryTransformNodeComboBox.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
@@ -209,7 +221,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.referenceToFrameModeComboBox.currentIndexChanged.connect(self.updateParameterNodeFromGUI)
 
         # Buttons
-        self.ui.trajectoryComboBox.connect('currentTextChanged(QString)', self.trajectoryChanged)
         self.ui.calculateReferenceToFramePushButton.connect('clicked(bool)', self.onCalculateReferenceToFrame)
         self.ui.calculateTrajectoryPushButton.connect('clicked(bool)', self.onCalculateTrajectory)
 
@@ -312,29 +323,25 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Initial GUI update
         self.updateGUIFromParameterNode()
 
-    def trajectoryChanged(self, currentText):
-        if currentText == 'Select...':
-            self._parameterNode.SetParameter("TrajectoryIndex", "-1")
-            return
-        elif currentText == 'Create new trajectory as':
-            self.createNewTrajectory()
-        elif currentText.startswith('Import from'):
-            self.importTrajectoryFrom(currentText.removeprefix('Import from '))
-            self.updateGUIFromParameterNode() # update if modified or not
-        elif currentText == 'Delete current trajectory':
-            self.deleteCurrentTrajectory()
-            self.ui.trajectoryComboBox.setCurrentText('Select...')
-        else:
-            trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-            trajectoryNames = [trajectory['Name'] for trajectory in trajectories]
-            trajectoryIndex = str(trajectoryNames.index(currentText)) if currentText in trajectoryNames else "-1"
-            self._parameterNode.SetParameter("TrajectoryIndex", trajectoryIndex)
-        
-    def createNewTrajectory(self):
-        trajectoryName = qt.QInputDialog.getText(qt.QWidget(), 'New trajectory', 'Name:')
-        if not trajectoryName:
-            return
+    def trajectoryTransformNodeChanged(self, node):
+        nodeID = None if node is None else node.GetID()
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
+        trajectories = [t for t in trajectories if slicer.mrmlScene.GetNodeByID(t['OutputTransformID']) is not None]
+        transformNodeIDs = [t['OutputTransformID'] for t in trajectories]
+        if nodeID in transformNodeIDs:
+            trajectoryIndex = transformNodeIDs.index(node.GetID())
+        elif nodeID:
+            newTrajectory = self.createNewTrajectory(node.GetID())
+            trajectories.append(newTrajectory)
+            trajectoryIndex = len(trajectories)-1
+        else:
+            trajectoryIndex = -1
+        wasModified = self._parameterNode.StartModify() 
+        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
+        self._parameterNode.SetParameter("TrajectoryIndex", str(trajectoryIndex))
+        self._parameterNode.EndModify(wasModified)
+
+    def createNewTrajectory(self, nodeID):
         trajectory = {}
         trajectory['Entry'] = '0,0,0;RAS;0'
         trajectory['Target'] = '0,0,0;RAS;0'
@@ -343,25 +350,8 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         trajectory['Arc'] = 90
         trajectory['Roll'] = 0
         trajectory['Mode'] = 'Target Mounting Ring Arc'
-        trajectory['OutputTransformID'] = ''
-        trajectory['Name'] = trajectoryName
-        trajectories.append(trajectory)
-        wasModified = self._parameterNode.StartModify() 
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
-        self._parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
-        self._parameterNode.EndModify(wasModified)
-
-    def deleteCurrentTrajectory(self):
-        trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
-        trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
-        if trajectories and (trajectoryIndex>=0):
-            trajectories.pop(trajectoryIndex)
-        else:
-            return
-        wasModified = self._parameterNode.StartModify() 
-        self._parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
-        self._parameterNode.SetParameter("TrajectoryIndex", "-1")
-        self._parameterNode.EndModify(wasModified)
+        trajectory['OutputTransformID'] = nodeID
+        return trajectory
 
     def importTrajectoryFrom(self, importer):
         # Get importer module
@@ -373,15 +363,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         wasModified = self._parameterNode.StartModify()  
         importerModule.setParameterNodeFromDevice(self._parameterNode, filePath=None, importInFrameSpace=self.transformReferenceVolumeButton.checked)
         self._parameterNode.EndModify(wasModified)
-
-    def updateTrajectoriesComboBox(self, trajectoryNames=None):
-        trajectoryNames = [] if trajectoryNames is None else trajectoryNames
-        importFromOptions = glob.glob(os.path.join(os.path.dirname(__file__), 'StereotacticPlanLib', 'ImportFrom', '*.py'))
-        importFromOptions = ['Import from ' + os.path.basename(opt).replace('.py','') for opt in importFromOptions]
-        importFromOptions.remove('Import from __init__')
-        trajectoryItems = ['Select...'] + trajectoryNames + ['Create new trajectory as'] + importFromOptions + ['Delete current trajectory']
-        self.ui.trajectoryComboBox.clear()
-        self.ui.trajectoryComboBox.addItems(trajectoryItems)
 
     def updateGUIFromParameterNode(self, caller=None, event=None):
         """
@@ -398,8 +379,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         trajectories = json.loads(self._parameterNode.GetParameter("Trajectories"))
         trajectoryIndex = int(self._parameterNode.GetParameter("TrajectoryIndex"))
 
-        self.updateTrajectoriesComboBox([trajectory['Name'] for trajectory in trajectories])
-
         currentTrajectoryAvailable = trajectories and (trajectoryIndex>=0)
 
         self.ui.trajectoryModeComboBox.setEnabled(currentTrajectoryAvailable)
@@ -407,11 +386,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.ui.ringAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
         self.ui.arcAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
         self.ui.rollAngleSliderWidget.setEnabled(currentTrajectoryAvailable)
-        self.ui.trajectoryTransformNodeComboBox.setEnabled(currentTrajectoryAvailable)
 
         if currentTrajectoryAvailable:
             currentTrajectory = trajectories[trajectoryIndex]
-            self.ui.trajectoryComboBox.setCurrentText(currentTrajectory['Name'])
             self.ui.trajectoryModeComboBox.setCurrentText(currentTrajectory['Mode'])
             self.ui.mountingComboBox.setCurrentText(currentTrajectory['Mounting'])
             self.ui.ringAngleSliderWidget.value = currentTrajectory['Ring']
@@ -421,7 +398,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             self.ui.trajectoryTransformNodeComboBox.setCurrentNode(transformNode)
             self.updateCoordinatesWidgetFromTrajectory(currentTrajectory)
         else:
-            self.ui.trajectoryComboBox.setCurrentText('Select...')
             self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(None)
 
         for widget in self.trajectoryCoordinateWidgets.values():
@@ -607,22 +583,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                     sliceNode.SetOrientationToCoronal()
                 elif sliceNode.GetName() == 'Yellow':
                     sliceNode.SetOrientationToSagittal()
-
-    # def onApplyButton(self):
-    #     """
-    #     Run processing when user clicks "Apply" button.
-    #     """
-    #     with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
-
-    #         # Compute output
-    #         self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-    #                            self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
-
-    #         # Compute inverted output (if needed)
-    #         if self.ui.invertedOutputSelector.currentNode():
-    #             # If additional output volume is selected then result with inverted threshold is written there
-    #             self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-    #                                self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
 
 
 #

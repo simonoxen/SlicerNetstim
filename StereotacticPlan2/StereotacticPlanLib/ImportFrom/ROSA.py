@@ -42,7 +42,8 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
   trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
   for rosa_trajectory in rosa_trajectories:
     new_trajectory = {}
-    new_trajectory['Name'] = rosa_trajectory['name']
+    trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Trajectory " + rosa_trajectory['name'])
+    new_trajectory['OutputTransformID'] = trajectoryTransform.GetID()
     new_trajectory['Mode'] = 'Target Entry Roll'
     new_trajectory['Entry'] = rosa_trajectory['entry'] + ';RAS;0'
     new_trajectory['Target'] = rosa_trajectory['target'] + ';RAS;0'
@@ -50,7 +51,6 @@ def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=
     new_trajectory['Arc'] = 90
     new_trajectory['Ring'] = 90
     new_trajectory['Roll'] = 0
-    new_trajectory['OutputTransformID'] = ''
     trajectories.append(new_trajectory)
 
   parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
