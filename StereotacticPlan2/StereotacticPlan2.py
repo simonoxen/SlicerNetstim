@@ -130,7 +130,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         for name in ['Entry', 'Target']:
             self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name, self.setTransformableWidgetsState)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
-            self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateOutputTrajectoryTransform)
             self.ui.trajectoriesCollapsibleButton.layout().insertRow(2,name + ':', self.trajectoryCoordinateWidgets[name])
         for widget in [self.trajectoryCoordinateWidgets['Entry'], self.ui.rollAngleSliderWidget]:
             widget.setVisible(False)
@@ -222,14 +221,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         # Buttons
         self.ui.calculateReferenceToFramePushButton.connect('clicked(bool)', self.onCalculateReferenceToFrame)
-        self.ui.calculateTrajectoryPushButton.connect('clicked(bool)', self.onCalculateTrajectory)
-
-        # Auto Update
-        self.ui.arcAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
-        self.ui.ringAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
-        self.ui.rollAngleSliderWidget.connect("valueChanged(double)", self.updateOutputTrajectoryTransform)
-        self.ui.mountingComboBox.currentIndexChanged.connect(self.updateOutputTrajectoryTransform)
-        self.ui.trajectoryModeComboBox.connect("currentTextChanged(QString)",  self.updateOutputTrajectoryTransform)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -415,7 +406,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self.ui.viewTrajectoryToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.resliceDriverToolButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
-        self.ui.calculateTrajectoryPushButton.setEnabled(self.ui.trajectoryTransformNodeComboBox.currentNodeID != '')
         self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
 
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
@@ -462,6 +452,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             slicer.util.getNode(self.ui.referenceVolumeNodeComboBox.currentNodeID).SetAndObserveTransformNodeID(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID if self.transformReferenceVolumeButton.checked else None)
 
         self._parameterNode.SetParameter("ReferenceToFrameMode", self.ui.referenceToFrameModeComboBox.currentText)
+
+        if self.ui.trajectoryTransformNodeComboBox.currentNodeID != "":
+            self.onCalculateTrajectory()
 
         self._parameterNode.EndModify(wasModified)
 
@@ -516,9 +509,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
                                                 sourceCoordinates,
                                                 targetCoordinates)
 
-    def updateOutputTrajectoryTransform(self):
-        if self.ui.autoUpdateTrajectoryCheckBox.checked and self.ui.trajectoryTransformNodeComboBox.currentNode():
-            self.onCalculateTrajectory()
 
     def onCalculateTrajectory(self):
         try:
