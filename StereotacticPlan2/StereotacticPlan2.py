@@ -349,7 +349,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
 
         self.ui.viewTrajectoryToolButton.setEnabled(currentTrajectoryAvailable)
         self.ui.resliceDriverToolButton.setEnabled(currentTrajectoryAvailable)
-        self.ui.calculateReferenceToFramePushButton.setEnabled(self.ui.referenceToFrameTransformNodeComboBox.currentNodeID != '')
+        self.ui.calculateReferenceToFramePushButton.setEnabled(bool(self._parameterNode.GetNodeReference("ReferenceToFrameTransform")))
 
         self.ui.referenceToFrameTransformNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceToFrameTransform"))
         self.ui.referenceVolumeNodeComboBox.setCurrentNode(self._parameterNode.GetNodeReference("ReferenceVolume"))
