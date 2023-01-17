@@ -1,12 +1,10 @@
-import qt
 import re
 import slicer
 from DICOMLib import DICOMUtils
 import numpy as np
-import json
+import StereotacticPlan2
 
 from .importerBase import ImporterDialogBase
-
 
 class ImporterDialog(ImporterDialogBase):
     def __init__(self):
@@ -14,116 +12,48 @@ class ImporterDialog(ImporterDialogBase):
         self.importerName = 'ROSA'
         self.fileSelectTitle = 'Select ROSA file'
         self.fileSelectExt = 'ros'
-
 class Importer():
-    def __init__(self):
-        self.fileExtension = '.ros'
-    
-    
-def setParameterNodeFromDevice(parameterNode, filePath=None, importInFrameSpace=False, DICOMdir=None):
+    def __init__(self, filePath):
+        self.logic = StereotacticPlan2.StereotacticPlan2Logic()
+        self.manager = ROSAManager(filePath)
 
-    if filePath is None:
-        filePath, computeReferenceToFrame, importACPC, importDICOM, DICOMdir = getOptionsFromDialog(importInFrameSpace)
-    else:
-        computeReferenceToFrame = True
-        importACPC = True
-        importDICOM = True if DICOMdir is not None else False
-
-    if filePath is None:
-        return
-
-    manager = ROSAManager(filePath)
-    rosa_trajectories = manager.getTrajectoriesList()
-
-    import StereotacticPlan2
-    logic = StereotacticPlan2.StereotacticPlan2Logic()
-
-    wasModified = parameterNode.StartModify()
-
-    if importACPC:
-        parameterNode.SetParameter("Reference AC", manager.getCoordinates('AC') + ';RAS')
-        parameterNode.SetParameter("Reference PC", manager.getCoordinates('PC') + ';RAS')
-        parameterNode.SetParameter("Reference MS", manager.getCoordinates('IH') + ';RAS')
+    def setACPCCoordinatesToParameterNode(self, parameterNode):
+        parameterNode.SetParameter("Reference AC", self.manager.getCoordinates('AC') + ';RAS')
+        parameterNode.SetParameter("Reference PC", self.manager.getCoordinates('PC') + ';RAS')
+        parameterNode.SetParameter("Reference MS", self.manager.getCoordinates('IH') + ';RAS')
         parameterNode.SetParameter("ReferenceToFrameMode", "ACPC Align")
 
-    if computeReferenceToFrame:
+    def getReferenceToFrameTransform(self):
         referenceToFrameNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Reference To Frame")
-        logic.runACPCAlignment(referenceToFrameNode, 
-                                np.fromstring(manager.getCoordinates('AC'), dtype=float, sep=','),
-                                np.fromstring(manager.getCoordinates('PC'), dtype=float, sep=','),
-                                np.fromstring(manager.getCoordinates('IH'), dtype=float, sep=','))
-        parameterNode.SetNodeReferenceID("ReferenceToFrameTransform", referenceToFrameNode.GetID())
+        self.logic.runACPCAlignment(referenceToFrameNode, 
+                                np.fromstring(self.manager.getCoordinates('AC'), dtype=float, sep=','),
+                                np.fromstring(self.manager.getCoordinates('PC'), dtype=float, sep=','),
+                                np.fromstring(self.manager.getCoordinates('IH'), dtype=float, sep=','))
+        return referenceToFrameNode
 
-    trajectories = json.loads(parameterNode.GetParameter("Trajectories"))
-    for rosa_trajectory in rosa_trajectories:
-        new_trajectory = {}
-        trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Trajectory " + rosa_trajectory['name'])
-        new_trajectory['OutputTransformID'] = trajectoryTransform.GetID()
-        new_trajectory['Mode'] = 'Target Entry Roll'
-        new_trajectory['Entry'] = rosa_trajectory['entry'] + ';RAS;0'
-        new_trajectory['Target'] = rosa_trajectory['target'] + ';RAS;0'
-        new_trajectory['Mounting'] = 'lateral-left'
-        new_trajectory['Arc'] = 90
-        new_trajectory['Ring'] = 90
-        new_trajectory['Roll'] = 0
-        trajectories.append(new_trajectory)
-
-    parameterNode.SetParameter("Trajectories", json.dumps(trajectories))
-    parameterNode.SetParameter("TrajectoryIndex", str(len(trajectories)-1))
-
-    if importDICOM:
-        first_series_uid = manager.getFirstSeriesUID()
+    def getTrajectoryTransforms(self, importInReferenceSpace):
+        loadedNodeIDs = []
+        for rosa_trajectory in self.manager.getTrajectoriesList():
+            trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "ROSA Trajectory " + rosa_trajectory['name'])
+            trajectoryTransform.SetAttribute('NetstimStereotacticPlan', '1')
+            trajectoryTransform.SetAttribute('Mode', 'Target Entry Roll')
+            trajectoryTransform.SetAttribute('Entry', rosa_trajectory['entry'] + ';RAS;0')
+            trajectoryTransform.SetAttribute('Target', rosa_trajectory['target'] + ';RAS;0')
+            trajectoryTransform.SetAttribute('Mounting', 'lateral-left')
+            trajectoryTransform.SetAttribute('Arc', '90')
+            trajectoryTransform.SetAttribute('Ring', '90')
+            trajectoryTransform.SetAttribute('Roll', '0')
+            loadedNodeIDs.append(trajectoryTransform.GetID())
+        return loadedNodeIDs
+    
+    def getReferenceVolumeFromDICOM(self, DICOMDir):
+        first_series_uid = self.manager.getFirstSeriesUID()
         with DICOMUtils.TemporaryDICOMDatabase() as database:
-            DICOMUtils.importDicom(DICOMdir, database)
+            DICOMUtils.importDicom(DICOMDir, database)
             rosa_reference_node_ID = DICOMUtils.loadSeriesByUID([first_series_uid])[0]
         slicer.modules.volumes.logic().CenterVolume(slicer.util.getNode(rosa_reference_node_ID))
         slicer.util.resetSliceViews()
-        parameterNode.SetNodeReferenceID("ReferenceVolume", rosa_reference_node_ID)
-
-    parameterNode.EndModify(wasModified)
-
-
-def getOptionsFromDialog(importInFrameSpace):
-    dialog = qt.QDialog()
-    dialog.setWindowTitle('ROSA Import Options')
-
-    planningPDFButton = qt.QPushButton('Click to select')
-    planningPDFButton.clicked.connect(lambda: planningPDFButton.setText(qt.QFileDialog.getOpenFileName(qt.QWidget(), 'Select ROSA file', '', '*.ros')))
-
-    computeReferenceToFrameCheckBox = qt.QCheckBox()
-    computeReferenceToFrameCheckBox.setEnabled(False)
-
-    importACPCCheckBox = qt.QCheckBox()
-    importACPCCheckBox.connect("toggled(bool)", lambda b: computeReferenceToFrameCheckBox.setEnabled(b))
-
-    DICOMDirButton = qt.QPushButton('Click to select')
-    DICOMDirButton.clicked.connect(lambda: DICOMDirButton.setText(qt.QFileDialog.getExistingDirectory(qt.QWidget(), 'Select DICOM directory', '')))
-    DICOMDirButton.setEnabled(False)
-
-    importDICOMCheckBox = qt.QCheckBox()
-    importDICOMCheckBox.connect("toggled(bool)", lambda b: DICOMDirButton.setEnabled(b))
-
-    buttonBox = qt.QDialogButtonBox(qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel, qt.Qt.Horizontal, dialog)
-    buttonBox.accepted.connect(lambda: dialog.accept())
-    buttonBox.rejected.connect(lambda: dialog.reject())
-
-    form = qt.QFormLayout(dialog)
-    form.addRow('ROSA file: ', planningPDFButton)
-    if not importInFrameSpace:
-        form.addRow('Import ACPC coords: ', importACPCCheckBox)
-        form.addRow('Compute reference to frame transform: ', computeReferenceToFrameCheckBox)
-        form.addRow('Import reference image: ', importDICOMCheckBox)
-        form.addRow('DICOM directory: ', DICOMDirButton)
-    form.addRow(buttonBox)
-
-    if dialog.exec() == qt.QDialog.Accepted:
-        return  planningPDFButton.text,\
-              computeReferenceToFrameCheckBox.checked,\
-              importACPCCheckBox.checked,\
-              importDICOMCheckBox.checked,\
-              DICOMDirButton.text
-    else:
-        return None, None, None, None, None
+        return slicer.util.getNode(rosa_reference_node_ID)
 class ROSAManager:
     def __init__(self, ros_file_path):
         with open(ros_file_path, 'r') as f:

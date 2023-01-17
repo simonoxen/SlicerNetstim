@@ -40,7 +40,7 @@ class Importer():
         return referenceToFrameNode
 
     def getTrajectoryTransforms(self, importInReferenceSpace):
-        trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Trajectory " + self.stereotaxyReport.getTrajectoryInformation()['Name'])
+        trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Brainlab Trajectory " + self.stereotaxyReport.getTrajectoryInformation()['Name'])
         trajectoryTransform.SetAttribute('NetstimStereotacticPlan', '1')
         trajectoryTransform.SetAttribute('Mode', 'Target Mounting Ring Arc')
         if importInReferenceSpace:
