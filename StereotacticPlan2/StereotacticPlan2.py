@@ -572,7 +572,7 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
              parameterNode.SetParameter("CurrentTrajectoryTransform","")
 
     def transformCoordsFromXYZToRAS(self, coords):
-        return  np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
+        return np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]
 
     def transformCoordsFromRASToXYZ(self, coords):
         return np.dot(np.linalg.inv(self.getFrameXYZToRASTransform()), np.append(coords, 1))[:3]

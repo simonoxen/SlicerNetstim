@@ -40,6 +40,7 @@ class Importer():
         return referenceToFrameNode
 
     def getTrajectoryTransforms(self, importInReferenceSpace):
+        # Set up node
         trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Brainlab Trajectory " + self.stereotaxyReport.getTrajectoryInformation()['Name'])
         trajectoryTransform.SetAttribute('NetstimStereotacticPlan', '1')
         trajectoryTransform.SetAttribute('Mode', 'Target Mounting Ring Arc')
@@ -50,9 +51,19 @@ class Importer():
             trajectoryTransform.SetAttribute('Entry', self.stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ;1')
             trajectoryTransform.SetAttribute('Target', self.stereotaxyReport.getCoordinates('Target', 'Headring') + ';XYZ;1')
         trajectoryTransform.SetAttribute('Mounting', self.planningDictionary["Mounting"])
-        trajectoryTransform.SetAttribute('Arc', self.planningDictionary["Arc Angle"])
         trajectoryTransform.SetAttribute('Ring', self.planningDictionary["Ring Angle"])
+        trajectoryTransform.SetAttribute('Arc', self.planningDictionary["Arc Angle"])
         trajectoryTransform.SetAttribute('Roll', '0')
+        # Compute
+        if importInReferenceSpace:
+            targetCoordinatesForComputation = np.fromstring(self.stereotaxyReport.getCoordinates('Target', 'DICOM'), dtype=float, sep=',') 
+        else:
+            targetCoordinatesForComputation = self.logic.transformCoordsFromXYZToRAS(np.fromstring(self.stereotaxyReport.getCoordinates('Target', 'Headring'), dtype=float, sep=','))
+        self.logic.computeTrajectoryFromTargetMountingRingArc(trajectoryTransform,
+                                                                targetCoordinatesForComputation,
+                                                                self.planningDictionary["Mounting"],
+                                                                float(self.planningDictionary["Ring Angle"]),
+                                                                float(self.planningDictionary["Arc Angle"]))
         return [trajectoryTransform.GetID()]
     
     def getReferenceVolumeFromDICOM(self, DICOMDir):

@@ -34,6 +34,7 @@ class Importer():
     def getTrajectoryTransforms(self, importInReferenceSpace):
         loadedNodeIDs = []
         for rosa_trajectory in self.manager.getTrajectoriesList():
+            # Set up node
             trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "ROSA Trajectory " + rosa_trajectory['name'])
             trajectoryTransform.SetAttribute('NetstimStereotacticPlan', '1')
             trajectoryTransform.SetAttribute('Mode', 'Target Entry Roll')
@@ -44,6 +45,17 @@ class Importer():
             trajectoryTransform.SetAttribute('Ring', '90')
             trajectoryTransform.SetAttribute('Roll', '0')
             loadedNodeIDs.append(trajectoryTransform.GetID())
+            # Compute
+            targetCoordinatesForComputation = np.fromstring(rosa_trajectory['target'], dtype=float, sep=',') 
+            entryCoordinatesForComputation = np.fromstring(rosa_trajectory['entry'], dtype=float, sep=',') 
+            if not importInReferenceSpace:
+                transform = slicer.util.array(self.getReferenceToFrameTransform().GetID())
+                targetCoordinatesForComputation = np.dot(transform, np.append(targetCoordinatesForComputation, 1))[:3]
+                entryCoordinatesForComputation = np.dot(transform, np.append(entryCoordinatesForComputation, 1))[:3]
+            self.logic.computeTrajectoryFromTargetEntryRoll(trajectoryTransform,
+                                targetCoordinatesForComputation,
+                                entryCoordinatesForComputation,
+                                0)
         return loadedNodeIDs
     
     def getReferenceVolumeFromDICOM(self, DICOMDir):
