@@ -68,12 +68,10 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
-        # Custom Widgets
-        auxFolderID = self.getOrCreateAuxFolderID()
-        
+        # Custom Widgets        
         self.trajectoryCoordinateWidgets = {}
         for name in ['Entry', 'Target']:
-            self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name, self.setTransformableWidgetsState)
+            self.trajectoryCoordinateWidgets[name] =  TransformableCoordinatesWidget(name, self.setTransformableWidgetsState)
             self.trajectoryCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.trajectoriesCollapsibleButton.layout().insertRow(2,name + ':', self.trajectoryCoordinateWidgets[name])
         for widget in [self.trajectoryCoordinateWidgets['Entry'], self.ui.rollAngleSliderWidget]:
@@ -85,11 +83,11 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         
         self.referenceToFrameCoordinateWidgets = {}
         for name in ['Reference MS', 'Reference PC', 'Reference AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(auxFolderID, name, self.setTransformableWidgetsState)
+            self.referenceToFrameCoordinateWidgets[name] =  TransformableCoordinatesWidget(name, self.setTransformableWidgetsState)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(1, name + ':', self.referenceToFrameCoordinateWidgets[name])
         for name in ['Frame MS', 'Frame PC', 'Frame AC']:
-            self.referenceToFrameCoordinateWidgets[name] =  CustomCoordinatesWidget(auxFolderID, name)
+            self.referenceToFrameCoordinateWidgets[name] =  CustomCoordinatesWidget(name)
             self.referenceToFrameCoordinateWidgets[name].coordinatesChanged.connect(self.updateParameterNodeFromGUI)
             self.referenceToFrameCoordinateWidgets[name].setVisible(False)
             self.ui.referenceToFrameCollapsibleButton.layout().insertRow(5, name + ':', self.referenceToFrameCoordinateWidgets[name])
@@ -168,23 +166,6 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
 
-    def getOrCreateAuxFolderID(self):
-        shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-        for i in range(slicer.mrmlScene.GetNumberOfNodesByClass('vtkMRMLFolderDisplayNode')):
-            auxFolderID = shNode.GetItemByDataNode(slicer.mrmlScene.GetNthNodeByClass(i, 'vtkMRMLFolderDisplayNode'))
-            if 'StereotacticPlan' in shNode.GetItemAttributeNames(auxFolderID):
-                shNode.RemoveItemChildren(auxFolderID)
-                return auxFolderID
-        auxFolderID = shNode.CreateFolderItem(shNode.GetSceneItemID(), 'SterotacticPlanMarkupsNodes')
-        displayNode = slicer.vtkMRMLFolderDisplayNode()
-        displayNode.SetName(shNode.GetItemName(auxFolderID))
-        displayNode.SetHideFromEditors(0)
-        displayNode.SetAttribute('SubjectHierarchy.Folder', "1")
-        shNode.GetScene().AddNode(displayNode)
-        shNode.SetItemDataNode(auxFolderID, displayNode)
-        shNode.ItemModified(auxFolderID)
-        shNode.SetItemAttribute(auxFolderID, 'StereotacticPlan', '1')
-        return auxFolderID
 
     def cleanup(self):
         """
@@ -211,6 +192,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         Called just before the scene is closed.
         """
         # Parameter node will be reset, do not use it anymore
+        self.setTransformableWidgetsState(False)
+        if self._parameterNode:
+            self._parameterNode.SetNodeReferenceID("ReferenceToFrameTransform","")
         self.setParameterNode(None)
 
     def onSceneEndClose(self, caller, event):
@@ -220,6 +204,11 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         # If this module is shown while the scene is closed then recreate a new parameter node immediately
         if self.parent.isEntered:
             self.initializeParameterNode()
+        if hasattr(self,'referenceToFrameCoordinateWidgets'):
+            for widget in self.referenceToFrameCoordinateWidgets.values():
+                widget.setUpMarkupsNode()
+            for widget in self.trajectoryCoordinateWidgets.values():
+                widget.setUpMarkupsNode()
 
     def initializeParameterNode(self):
         """
@@ -486,7 +475,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
             slicer.mrmlScene.RemoveNode(self._parameterNode.GetNodeReference("PreviewLine"))
 
     def updatePreviewLineTransform(self, node):
-        if self._parameterNode.GetNodeReferenceID("PreviewLine"):
+        if self._parameterNode and self._parameterNode.GetNodeReferenceID("PreviewLine"):
             self._parameterNode.GetNodeReference("PreviewLine").SetAndObserveTransformNodeID(node.GetID() if node else None)
 
     def setDefaultResliceDriver(self, state):
@@ -568,9 +557,11 @@ class StereotacticPlan2Logic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("TransformableWidgetsChecked"):
             parameterNode.SetParameter("TransformableWidgetsChecked", "0")
         if not parameterNode.GetParameter("ReferenceToFrameMode"):
-             parameterNode.SetParameter("ReferenceToFrameMode","ACPC Align")
-        if not parameterNode.GetParameter("CurrentTrajectoryTransform"):
-             parameterNode.SetParameter("CurrentTrajectoryTransform","")
+            parameterNode.SetParameter("ReferenceToFrameMode","ACPC Align")
+        if not parameterNode.GetNodeReference("CurrentTrajectoryTransform"):
+            parameterNode.SetNodeReferenceID("CurrentTrajectoryTransform","")
+        if not parameterNode.GetNodeReference("ReferenceToFrameTransform"):
+            parameterNode.SetNodeReferenceID("ReferenceToFrameTransform","")
 
     def transformCoordsFromXYZToRAS(self, coords):
         return np.dot(self.getFrameXYZToRASTransform(), np.append(coords, 1))[:3]

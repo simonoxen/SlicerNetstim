@@ -6,9 +6,10 @@ import vtk
 import StereotacticPlan2
 class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
-    def __init__(self, auxFolderID, name):
+    def __init__(self, name):
         super().__init__()
 
+        self.name = name
         self._updatingCoordinatesFromMarkups = False
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
@@ -32,12 +33,12 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.viewButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.viewButton)
 
-        placeAction = qt.QAction(self)
-        placeAction.setIcon(qt.QIcon(":/Icons/MarkupsFiducialMouseModePlace.png"))
-        placeAction.setCheckable(True)
-        placeAction.connect("toggled(bool)", self.onPlaceToggled)
+        self.placeAction = qt.QAction(self)
+        self.placeAction.setIcon(qt.QIcon(":/Icons/MarkupsFiducialMouseModePlace.png"))
+        self.placeAction.setCheckable(True)
+        self.placeAction.connect("toggled(bool)", self.onPlaceToggled)
         self.placeButton = qt.QToolButton(self)
-        self.placeButton.setDefaultAction(placeAction)
+        self.placeButton.setDefaultAction(self.placeAction)
         self.placeButton.setToolButtonStyle(qt.Qt.ToolButtonIconOnly)
         self.placeButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.placeButton)
@@ -47,19 +48,23 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self.transformButton.setFixedSize(buttonSize, buttonSize)
         self.layout().addWidget(self.transformButton)
 
-        self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', name)
-        self.markupsNode.AddControlPoint(0, 0, 0, name)
+        self.setUpMarkupsNode()
+        self.coordinatesChanged.connect(self.updateMarkupsNodeFromCoordinates)
+
+    def setUpMarkupsNode(self):
+        try:
+            slicer.mrmlScene.RemoveNode(self.markupsNode.GetID())
+        except:
+            pass
+        self.markupsNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLMarkupsFiducialNode', self.name)
+        self.markupsNode.SetHideFromEditors(True)
+        self.markupsNode.AddControlPoint(0, 0, 0, self.name)
         self.markupsNodeControlPointIndex = self.markupsNode.GetNumberOfControlPoints()-1
         self.markupsNode.SetNthControlPointVisibility(self.markupsNodeControlPointIndex, False)
         self.markupsNode.SetNthControlPointLocked(self.markupsNodeControlPointIndex, True)
-
-        shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-        shNode.SetItemParent(shNode.GetItemByDataNode(self.markupsNode), auxFolderID)
-
         self.markupsNode.AddObserver(self.markupsNode.PointModifiedEvent, self.updateCoordinatesFromMarkupsNode)
-        self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=placeAction: pa.setChecked(False))
-
-        self.coordinatesChanged.connect(self.updateMarkupsNodeFromCoordinates)
+        self.markupsNode.AddObserver(self.markupsNode.PointPositionDefinedEvent, lambda c,e,pa=self.placeAction: pa.setChecked(False))
+        return self.markupsNode
 
     def reset(self):
         self.setSystem('RAS')
@@ -135,8 +140,8 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
 class TransformableCoordinatesWidget(CustomCoordinatesWidget):
     
-    def __init__(self, auxFolderID, name, setTransformableWidgetsState):
-        super().__init__(auxFolderID, name)
+    def __init__(self, name, setTransformableWidgetsState):
+        super().__init__(name)
 
         self._transformNodeID = None
 
