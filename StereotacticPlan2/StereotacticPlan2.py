@@ -9,7 +9,6 @@ import slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
-import StereotacticPlanLib.util
 from StereotacticPlanLib.Widgets.CustomWidgets import CustomCoordinatesWidget, TransformableCoordinatesWidget
 
 #
