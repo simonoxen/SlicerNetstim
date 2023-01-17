@@ -39,26 +39,26 @@ class Importer():
         self.logic.runFiducialRegistration(referenceToFrameNode, sourceCoordinates, targetCoordinates)
         return referenceToFrameNode
 
-    def getTrajectoryTransforms(self, importInReferenceSpace):
+    def getTrajectoryTransforms(self, importInFrameSpace):
         # Set up node
         trajectoryTransform = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLinearTransformNode", "Brainlab Trajectory " + self.stereotaxyReport.getTrajectoryInformation()['Name'])
         trajectoryTransform.SetAttribute('NetstimStereotacticPlan', '1')
         trajectoryTransform.SetAttribute('Mode', 'Target Mounting Ring Arc')
-        if importInReferenceSpace:
-            trajectoryTransform.SetAttribute('Entry', self.stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS;0')
-            trajectoryTransform.SetAttribute('Target', self.stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS;0')
-        else:
+        if importInFrameSpace:
             trajectoryTransform.SetAttribute('Entry', self.stereotaxyReport.getCoordinates('Entry', 'Headring') + ';XYZ;1')
             trajectoryTransform.SetAttribute('Target', self.stereotaxyReport.getCoordinates('Target', 'Headring') + ';XYZ;1')
+        else:
+            trajectoryTransform.SetAttribute('Entry', self.stereotaxyReport.getCoordinates('Entry', 'DICOM') + ';RAS;0')
+            trajectoryTransform.SetAttribute('Target', self.stereotaxyReport.getCoordinates('Target', 'DICOM') + ';RAS;0')
         trajectoryTransform.SetAttribute('Mounting', self.planningDictionary["Mounting"])
         trajectoryTransform.SetAttribute('Ring', self.planningDictionary["Ring Angle"])
         trajectoryTransform.SetAttribute('Arc', self.planningDictionary["Arc Angle"])
         trajectoryTransform.SetAttribute('Roll', '0')
         # Compute
-        if importInReferenceSpace:
-            targetCoordinatesForComputation = np.fromstring(self.stereotaxyReport.getCoordinates('Target', 'DICOM'), dtype=float, sep=',') 
-        else:
+        if importInFrameSpace:
             targetCoordinatesForComputation = self.logic.transformCoordsFromXYZToRAS(np.fromstring(self.stereotaxyReport.getCoordinates('Target', 'Headring'), dtype=float, sep=','))
+        else:
+            targetCoordinatesForComputation = np.fromstring(self.stereotaxyReport.getCoordinates('Target', 'DICOM'), dtype=float, sep=',') 
         self.logic.computeTrajectoryFromTargetMountingRingArc(trajectoryTransform,
                                                                 targetCoordinatesForComputation,
                                                                 self.planningDictionary["Mounting"],

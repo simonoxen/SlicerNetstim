@@ -6,15 +6,13 @@ class ImporterDialogBase():
         self.fileSelectTitle = None
         self.fileSelectExt = None
 
-        self.importInReferenceSpace = True
-
         self.selectedFile = None
         self.computeReferenceToFrame = False
         self.importACPCCoordinates = False
         self.importDICOM = False
         self.DICOMDir = False
 
-    def run(self):
+    def run(self, importInFrameSpace):
         dialog = qt.QDialog()
         dialog.setWindowTitle(self.importerName + ' Import Options')
 
@@ -40,7 +38,7 @@ class ImporterDialogBase():
 
         form = qt.QFormLayout(dialog)
         form.addRow('Select File: ', fileSelectButton)
-        if self.importInReferenceSpace:
+        if not importInFrameSpace:
             form.addRow('Import ACPC coords: ', importACPCCoordinatesCheckBox)
             form.addRow('Compute reference to frame transform: ', computeReferenceToFrameCheckBox)
             form.addRow('Import reference image: ', importDICOMCheckBox)

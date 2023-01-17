@@ -31,7 +31,7 @@ class Importer():
                                 np.fromstring(self.manager.getCoordinates('IH'), dtype=float, sep=','))
         return referenceToFrameNode
 
-    def getTrajectoryTransforms(self, importInReferenceSpace):
+    def getTrajectoryTransforms(self, importInFrameSpace):
         loadedNodeIDs = []
         for rosa_trajectory in self.manager.getTrajectoriesList():
             # Set up node
@@ -48,7 +48,7 @@ class Importer():
             # Compute
             targetCoordinatesForComputation = np.fromstring(rosa_trajectory['target'], dtype=float, sep=',') 
             entryCoordinatesForComputation = np.fromstring(rosa_trajectory['entry'], dtype=float, sep=',') 
-            if not importInReferenceSpace:
+            if importInFrameSpace:
                 transform = slicer.util.array(self.getReferenceToFrameTransform().GetID())
                 targetCoordinatesForComputation = np.dot(transform, np.append(targetCoordinatesForComputation, 1))[:3]
                 entryCoordinatesForComputation = np.dot(transform, np.append(entryCoordinatesForComputation, 1))[:3]

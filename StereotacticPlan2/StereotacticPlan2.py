@@ -282,8 +282,9 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         import importlib
         importlib.import_module('.'.join(['StereotacticPlanLib', 'ImportFrom', importerName]))
         importerModule = getattr(StereotacticPlanLib.ImportFrom, importerName)
+        importInFrameSpace = self.transformReferenceVolumeButton.checked
         dialog = importerModule.ImporterDialog()
-        dialog.run()
+        dialog.run(importInFrameSpace)
         if dialog.selectedFile is None:
             return
         wasModified = self._parameterNode.StartModify()
@@ -296,7 +297,7 @@ class StereotacticPlan2Widget(ScriptedLoadableModuleWidget, VTKObservationMixin)
         if dialog.importDICOM:
             node = importer.getReferenceVolumeFromDICOM(dialog.DICOMDir)
             self._parameterNode.SetNodeReferenceID("ReferenceVolume", node.GetID())
-        loadedNodeIDs = importer.getTrajectoryTransforms(dialog.importInReferenceSpace)
+        loadedNodeIDs = importer.getTrajectoryTransforms(importInFrameSpace)
         self._parameterNode.SetNodeReferenceID("CurrentTrajectoryTransform", loadedNodeIDs[0])
         self._parameterNode.EndModify(wasModified)
 
