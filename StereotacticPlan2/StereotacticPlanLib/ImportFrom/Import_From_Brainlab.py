@@ -136,11 +136,11 @@ class StereotaxyReport():
     def getTrajectoryInformation(self):
         cropRegion = (self.pdfWidth/2, 130, self.pdfWidth, 240)
         tableSettings = {
-        "vertical_strategy": "text",
-        "horizontal_strategy": "lines",
-        "intersection_y_tolerance": 20,    
-        "keep_blank_chars": True,
-        }
+            "vertical_strategy": "text",
+            "horizontal_strategy": "lines",
+            "intersection_y_tolerance": 20,    
+            "keep_blank_chars": True,
+            }
         outList = self.pdf.pages[0].crop(cropRegion).extract_table(tableSettings)
         outDict = {r[0]:r[1] for r in outList}
         return outDict
@@ -148,11 +148,11 @@ class StereotaxyReport():
     def getPatientInformation(self):
         cropRegion = (0, 130, self.pdfWidth/2, 240)
         tableSettings = {
-        "vertical_strategy": "text",
-        "horizontal_strategy": "lines",
-        "intersection_y_tolerance": 20,    
-        "keep_blank_chars": True,
-        }
+            "vertical_strategy": "text",
+            "horizontal_strategy": "lines",
+            "intersection_y_tolerance": 20,    
+            "keep_blank_chars": True,
+            }
         outList = self.pdf.pages[0].crop(cropRegion).extract_table(tableSettings)
         outDict = {r[0]:r[1] for r in outList}
         return outDict
@@ -160,11 +160,11 @@ class StereotaxyReport():
     def getArcSettings(self):
         cropRegion = (0, 419, self.pdfWidth, 480)
         tableSettings = {
-        "vertical_strategy": "text",
-        "horizontal_strategy": "text",
-        "min_words_vertical": 0,
-        "keep_blank_chars": True,
-        }
+            "vertical_strategy": "text",
+            "horizontal_strategy": "text",
+            "min_words_vertical": 0,
+            "keep_blank_chars": True,
+            }
         outList = self.pdf.pages[0].crop(cropRegion).extract_table(tableSettings)
         outList = [[outList[0][i], outList[1][i]] for i in range(len(outList[0]))] # Transpose
         outDict = {r[0]:r[1].split(' ')[0] for r in outList} # Remove units
