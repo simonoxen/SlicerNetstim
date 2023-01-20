@@ -6,321 +6,205 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>450</width>
-    <height>783</height>
+    <width>433</width>
+    <height>608</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QComboBox" name="importFromComboBox"/>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleButton" name="referenceSpaceCollapsibleButton">
+    <widget class="ctkCollapsibleButton" name="referenceToFrameCollapsibleButton">
      <property name="text">
-      <string>Reference Space</string>
+      <string>Reference to frame</string>
      </property>
-     <property name="collapsed">
-      <bool>false</bool>
-     </property>
-     <layout class="QFormLayout" name="formLayout_5">
+     <layout class="QFormLayout" name="formLayout_2">
       <item row="0" column="0">
-       <widget class="QLabel" name="label_12">
+       <widget class="QLabel" name="label_7">
         <property name="text">
-         <string>Target (RAS): </string>
+         <string>Reference Volume: </string>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="ctkCoordinatesWidget" name="referenceTargetCoordinates"/>
-      </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="label_13">
+       <widget class="QLabel" name="label">
         <property name="text">
-         <string>Entry (RAS): </string>
+         <string>Mode: </string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="ctkCoordinatesWidget" name="referenceEntryCoordinates"/>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleButton" name="referenceToFrameCollapsibleButton">
-     <property name="text">
-      <string>Reference To Frame</string>
-     </property>
-     <property name="collapsed">
-      <bool>false</bool>
-     </property>
-     <layout class="QFormLayout" name="formLayout_3">
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_9">
-        <property name="text">
-         <string>Reference AC,PC,MS: </string>
-        </property>
+       <widget class="QComboBox" name="referenceToFrameModeComboBox">
+        <item>
+         <property name="text">
+          <string>ACPC Align</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>ACPC Register</string>
+         </property>
+        </item>
        </widget>
       </item>
       <item row="2" column="0">
-       <widget class="QLabel" name="label_10">
+       <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Frame AC,PC,MS: </string>
+         <string>Output Transform: </string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QFrame" name="frame_2">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
+       <widget class="qMRMLNodeComboBox" name="referenceToFrameTransformNodeComboBox">
+        <property name="nodeTypes">
+         <stringlist>
+          <string>vtkMRMLLinearTransformNode</string>
+         </stringlist>
         </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
+        <property name="noneEnabled">
+         <bool>true</bool>
         </property>
-        <property name="lineWidth">
-         <number>0</number>
+        <property name="editEnabled">
+         <bool>true</bool>
         </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
-         <item>
-          <widget class="qMRMLNodeComboBox" name="frameACPCMSComboBox">
-           <property name="nodeTypes">
-            <stringlist>
-             <string>vtkMRMLMarkupsFiducialNode</string>
-            </stringlist>
-           </property>
-           <property name="editEnabled">
-            <bool>true</bool>
-           </property>
-           <property name="renameEnabled">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="applyXYZToRASCheckBox">
-           <property name="text">
-            <string>Apply XYZ To RAS</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
+        <property name="renameEnabled">
+         <bool>true</bool>
+        </property>
        </widget>
       </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="label_11">
+      <item row="3" column="0" colspan="2">
+       <widget class="QPushButton" name="calculateReferenceToFramePushButton">
         <property name="text">
-         <string>Reference to frame transform: </string>
+         <string>Calculate</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="QFrame" name="frame_3">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
-        <property name="lineWidth">
-         <number>0</number>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_3">
-         <item>
-          <widget class="qMRMLNodeComboBox" name="referenceToFrameTransformComboBox">
-           <property name="nodeTypes">
-            <stringlist>
-             <string>vtkMRMLLinearTransformNode</string>
-            </stringlist>
-           </property>
-           <property name="editEnabled">
-            <bool>true</bool>
-           </property>
-           <property name="renameEnabled">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="calculateReferenceToFrameTransformPushButton">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>66</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>66</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="text">
-            <string>Calculate</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QFrame" name="frame_4">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_4">
-         <item>
-          <widget class="qMRMLNodeComboBox" name="referenceACPCMSComboBox">
-           <property name="nodeTypes">
-            <stringlist>
-             <string>vtkMRMLMarkupsFiducialNode</string>
-            </stringlist>
-           </property>
-           <property name="editEnabled">
-            <bool>true</bool>
-           </property>
-           <property name="renameEnabled">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout" name="referenceVolumeLayout">
+        <item>
+         <widget class="qMRMLNodeComboBox" name="referenceVolumeNodeComboBox">
+          <property name="nodeTypes">
+           <stringlist>
+            <string>vtkMRMLScalarVolumeNode</string>
+           </stringlist>
+          </property>
+          <property name="noneEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="addEnabled">
+           <bool>false</bool>
+          </property>
+          <property name="editEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
+    <widget class="ctkCollapsibleButton" name="trajectoriesCollapsibleButton">
      <property name="text">
-      <string>Frame Space</string>
+      <string>Trajectories</string>
      </property>
      <layout class="QFormLayout" name="formLayout">
-      <item row="1" column="1">
-       <widget class="QFrame" name="frame">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QRadioButton" name="targetMountingRingArcRadioButton">
-           <property name="text">
-            <string>Target Mounting Ring Arc</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="targetEntryRollRadioButton">
-           <property name="text">
-            <string>Target Entry Roll</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item row="4" column="0">
+      <item row="0" column="0">
        <widget class="QLabel" name="label_6">
         <property name="text">
-         <string>Target:</string>
+         <string>Trajectory:</string>
         </property>
        </widget>
       </item>
-      <item row="4" column="1">
-       <widget class="QFrame" name="frame_5">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_5">
-         <item>
-          <widget class="ctkCoordinatesWidget" name="frameTargetCoordinates">
-           <property name="coordinates" stdset="0">
-            <string>100,100,100</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QComboBox" name="frameTargetCoordinatesSystemComboBox">
-           <item>
-            <property name="text">
-             <string>XYZ</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>RAS</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-        </layout>
-       </widget>
+      <item row="0" column="1">
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <widget class="qMRMLNodeComboBox" name="trajectoryTransformNodeComboBox">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="nodeTypes">
+           <stringlist>
+            <string>vtkMRMLLinearTransformNode</string>
+           </stringlist>
+          </property>
+          <property name="noneEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="editEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="renameEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="selectNodeUponCreation">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="viewTrajectoryToolButton">
+          <property name="text">
+           <string>...</string>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="resliceDriverToolButton">
+          <property name="text">
+           <string>...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QToolButton" name="importFromToolButton">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="text">
+           <string>...</string>
+          </property>
+          <property name="popupMode">
+           <enum>QToolButton::InstantPopup</enum>
+          </property>
+          <property name="toolButtonStyle">
+           <enum>Qt::ToolButtonTextOnly</enum>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="frameEntryLabel">
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_3">
         <property name="text">
-         <string>Entry: </string>
+         <string>Mode:</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="1">
-       <widget class="QFrame" name="frameEntryFrame">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Plain</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_6">
-         <item>
-          <widget class="ctkCoordinatesWidget" name="frameEntryCoordinates">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QComboBox" name="frameEntryCoordinatesSystemComboBox">
-           <item>
-            <property name="text">
-             <string>XYZ</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>RAS</string>
-            </property>
-           </item>
-          </widget>
-         </item>
-        </layout>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="trajectoryModeComboBox">
+        <item>
+         <property name="text">
+          <string>Target Mounting Ring Arc</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Target Entry Roll</string>
+         </property>
+        </item>
        </widget>
       </item>
-      <item row="6" column="0">
-       <widget class="QLabel" name="mountingLabel">
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_9">
         <property name="text">
          <string>Mounting: </string>
         </property>
        </widget>
       </item>
-      <item row="6" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="mountingComboBox">
         <item>
          <property name="text">
@@ -344,14 +228,14 @@
         </item>
        </widget>
       </item>
-      <item row="7" column="0">
-       <widget class="QLabel" name="ringAngleLabel">
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_5">
         <property name="text">
          <string>Ring: </string>
         </property>
        </widget>
       </item>
-      <item row="7" column="1">
+      <item row="3" column="1">
        <widget class="ctkSliderWidget" name="ringAngleSliderWidget">
         <property name="minimum">
          <double>0.000000000000000</double>
@@ -364,14 +248,14 @@
         </property>
        </widget>
       </item>
-      <item row="8" column="0">
-       <widget class="QLabel" name="arcAngleLabel">
+      <item row="4" column="0">
+       <widget class="QLabel" name="label_8">
         <property name="text">
          <string>Arc: </string>
         </property>
        </widget>
       </item>
-      <item row="8" column="1">
+      <item row="4" column="1">
        <widget class="ctkSliderWidget" name="arcAngleSliderWidget">
         <property name="minimum">
          <double>0.000000000000000</double>
@@ -384,126 +268,20 @@
         </property>
        </widget>
       </item>
-      <item row="9" column="0">
-       <widget class="QLabel" name="rollAngleLabel">
+      <item row="5" column="0">
+       <widget class="QLabel" name="label_4">
         <property name="text">
          <string>Roll:</string>
         </property>
        </widget>
       </item>
-      <item row="9" column="1">
+      <item row="5" column="1">
        <widget class="ctkSliderWidget" name="rollAngleSliderWidget">
         <property name="enabled">
          <bool>false</bool>
         </property>
         <property name="maximum">
          <double>360.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleButton" name="outputsCollapsibleButton">
-     <property name="text">
-      <string>Output</string>
-     </property>
-     <layout class="QFormLayout" name="formLayout_4">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_2">
-        <property name="text">
-         <string>Output Transform: </string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="qMRMLNodeComboBox" name="outputSelector">
-        <property name="toolTip">
-         <string>Pick the output to the algorithm.</string>
-        </property>
-        <property name="nodeTypes">
-         <stringlist>
-          <string>vtkMRMLLinearTransformNode</string>
-         </stringlist>
-        </property>
-        <property name="showChildNodeTypes">
-         <bool>false</bool>
-        </property>
-        <property name="noneEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="addEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="removeEnabled">
-         <bool>true</bool>
-        </property>
-        <property name="editEnabled">
-         <bool>false</bool>
-        </property>
-        <property name="renameEnabled">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0" colspan="2">
-       <widget class="QPushButton" name="applyButton">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="toolTip">
-         <string>Run the algorithm.</string>
-        </property>
-        <property name="text">
-         <string>Apply</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>Auto-Update: </string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="QCheckBox" name="autoUpdateCheckBox">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
-    <widget class="ctkCollapsibleButton" name="advancedCollapsibleButton">
-     <property name="text">
-      <string>Visualization</string>
-     </property>
-     <property name="collapsed">
-      <bool>true</bool>
-     </property>
-     <layout class="QFormLayout" name="formLayout_2">
-      <item row="1" column="0" colspan="2">
-       <widget class="QPushButton" name="setDefaultResliceDriverPushButton">
-        <property name="text">
-         <string>Set Default Reslice Driver</string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="0">
-       <widget class="QLabel" name="label">
-        <property name="text">
-         <string>Preview Line: </string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QCheckBox" name="previewLineCheckBox">
-        <property name="text">
-         <string/>
         </property>
        </widget>
       </item>
@@ -533,11 +311,6 @@
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>ctkCoordinatesWidget</class>
-   <extends>QWidget</extends>
-   <header>ctkCoordinatesWidget.h</header>
-  </customwidget>
-  <customwidget>
    <class>ctkSliderWidget</class>
    <extends>QWidget</extends>
    <header>ctkSliderWidget.h</header>
@@ -559,224 +332,48 @@
   <connection>
    <sender>StereotacticPlan</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>outputSelector</receiver>
+   <receiver>referenceToFrameTransformNodeComboBox</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>82</x>
-     <y>135</y>
+     <x>184</x>
+     <y>236</y>
     </hint>
     <hint type="destinationlabel">
-     <x>220</x>
-     <y>161</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetEntryRollRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>frameEntryLabel</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>345</x>
-     <y>66</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>34</x>
-     <y>436</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetEntryRollRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>rollAngleSliderWidget</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>345</x>
-     <y>66</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>264</x>
-     <y>230</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>mountingComboBox</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>183</x>
-     <y>66</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>264</x>
-     <y>152</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>ringAngleSliderWidget</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>183</x>
-     <y>66</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>264</x>
-     <y>178</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>arcAngleSliderWidget</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>183</x>
-     <y>66</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>264</x>
-     <y>204</y>
+     <x>216</x>
+     <y>213</y>
     </hint>
    </hints>
   </connection>
   <connection>
    <sender>StereotacticPlan</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>frameACPCMSComboBox</receiver>
+   <receiver>referenceVolumeNodeComboBox</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>224</x>
-     <y>372</y>
+     <x>234</x>
+     <y>303</y>
     </hint>
     <hint type="destinationlabel">
-     <x>253</x>
-     <y>77</y>
+     <x>354</x>
+     <y>58</y>
     </hint>
    </hints>
   </connection>
   <connection>
    <sender>StereotacticPlan</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>referenceToFrameTransformComboBox</receiver>
+   <receiver>trajectoryTransformNodeComboBox</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>224</x>
-     <y>372</y>
+     <x>234</x>
+     <y>303</y>
     </hint>
     <hint type="destinationlabel">
-     <x>263</x>
-     <y>121</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>StereotacticPlan</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>referenceACPCMSComboBox</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>224</x>
-     <y>387</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>303</x>
-     <y>186</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>mountingLabel</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>168</x>
-     <y>344</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>44</x>
-     <y>478</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>ringAngleLabel</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>168</x>
-     <y>344</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>32</x>
-     <y>504</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetMountingRingArcRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>arcAngleLabel</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>168</x>
-     <y>344</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>29</x>
-     <y>530</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetEntryRollRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>frameEntryFrame</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>340</x>
-     <y>344</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>254</x>
-     <y>443</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>targetEntryRollRadioButton</sender>
-   <signal>toggled(bool)</signal>
-   <receiver>rollAngleLabel</receiver>
-   <slot>setVisible(bool)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>340</x>
-     <y>344</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>28</x>
-     <y>556</y>
+     <x>282</x>
+     <y>359</y>
     </hint>
    </hints>
   </connection>

@@ -3,7 +3,7 @@ import ctk
 import qt
 import numpy as np
 import vtk
-import StereotacticPlan2
+import StereotacticPlan
 class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
 
     def __init__(self, name):
@@ -14,7 +14,7 @@ class CustomCoordinatesWidget(ctk.ctkCoordinatesWidget):
         self._updatingMarkupsFromCoordinates = False
         self._wasXYZ = False
         self._transformObserver = None
-        self._logic = StereotacticPlan2.StereotacticPlan2Logic()
+        self._logic = StereotacticPlan.StereotacticPlanLogic()
 
         self.systemComboBox = qt.QComboBox(self)
         self.systemComboBox.addItems(['RAS', 'XYZ'])

@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from DICOMLib import DICOMUtils
 import pydicom as dicom
-import StereotacticPlan2
+import StereotacticPlan
 
 from .importerBase import ImporterDialogBase
 
@@ -19,7 +19,7 @@ class ImporterDialog(ImporterDialogBase):
 
 class Importer():
     def __init__(self, filePath):
-        self.logic =  StereotacticPlan2.StereotacticPlan2Logic()
+        self.logic =  StereotacticPlan.StereotacticPlanLogic()
         self.stereotaxyReport = StereotaxyReport(filePath)
         self.planningDictionary = self.stereotaxyReport.getArcSettings()
 

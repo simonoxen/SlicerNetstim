@@ -4,16 +4,18 @@ set(MODULE_NAME StereotacticPlan)
 # -----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
-  StereotacticPlanLib/__init__.py
-  StereotacticPlanLib/util.py
+  StereotacticPlanLib/ImportFrom/Import_From_Brainlab.py
+  StereotacticPlanLib/ImportFrom/Import_From_ROSA.py
+  StereotacticPlanLib/ImportFrom/importerBase.py
   StereotacticPlanLib/ImportFrom/__init__.py
-  StereotacticPlanLib/ImportFrom/Brainlab.py
-  StereotacticPlanLib/ImportFrom/ROSA.py
+  StereotacticPlanLib/Widgets/CustomWidgets.py
+  StereotacticPlanLib/Widgets/__init__.py
 )
 
 set(MODULE_PYTHON_RESOURCES
   Resources/Icons/${MODULE_NAME}.png
   Resources/UI/${MODULE_NAME}.ui
+  Resources/Icons/VolumeResliceDriver.png
 )
 
 # -----------------------------------------------------------------------------

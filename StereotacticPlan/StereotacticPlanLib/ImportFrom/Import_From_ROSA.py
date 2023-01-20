@@ -2,7 +2,7 @@ import re
 import slicer
 from DICOMLib import DICOMUtils
 import numpy as np
-import StereotacticPlan2
+import StereotacticPlan
 
 from .importerBase import ImporterDialogBase
 
@@ -14,7 +14,7 @@ class ImporterDialog(ImporterDialogBase):
         self.fileSelectExt = 'ros'
 class Importer():
     def __init__(self, filePath):
-        self.logic = StereotacticPlan2.StereotacticPlan2Logic()
+        self.logic = StereotacticPlan.StereotacticPlanLogic()
         self.manager = ROSAManager(filePath)
 
     def setACPCCoordinatesToParameterNode(self, parameterNode):
