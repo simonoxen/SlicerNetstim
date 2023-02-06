@@ -24,13 +24,54 @@ class NetstimPreferences(ScriptedLoadableModule):
 
     # Additional initialization step after application startup is complete
     slicer.app.connect("startupCompleted()", setUpSettingsPanel)
+    slicer.app.connect("startupCompleted()", lambda: NodeObserver())
 
+#
+# Node Observer
+#
+COREG_NODES_NEEDED = 2
+NORM_NODES_NEEDED = 2
+class NodeObserver(VTKObservationMixin):
+  def __init__(self):
+    super().__init__()
+    self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NodeAddedEvent, self.onNodeAdded)
+    self.coreg_nodes_count = 0
+    self.norm_nodes_count = 0
+  
+  @vtk.calldata_type(vtk.VTK_OBJECT)
+  def onNodeAdded(self, caller, event, node):
+    nodeName = node.GetName()
+    if nodeName.startswith('leaddbs:'):
+      task = nodeName.split(':')[1]
+      if task == 'coreg':
+        self.coreg_nodes_count = self.coreg_nodes_count + 1
+        if self.coreg_nodes_count == COREG_NODES_NEEDED:
+          self.setUpCoregScene()
+      elif task == 'norm':
+        self.norm_nodes_count = self.norm_nodes_count + 1
+        if self.norm_nodes_count == NORM_NODES_NEEDED:
+          self.setUpNormScene()
+  
+  def setUpCoregScene(self):
+    preopNode = slicer.util.getNode('leaddbs:coreg:preop')
+    postopNode = slicer.util.getNode('leaddbs:coreg:postop')
+    qt.QTimer.singleShot(100, lambda b=preopNode, f=postopNode: slicer.util.setSliceViewerLayers(background=b.GetID(), foreground=f.GetID(), foregroundOpacity=0.5))
+    self.coreg_nodes_count = 0
+
+  def setUpNormScene(self):
+    templateNode = slicer.util.getNode('leaddbs:norm:template')
+    postopNode = slicer.util.getNode('leaddbs:norm:postop')
+    qt.QTimer.singleShot(100, lambda b=templateNode, f=postopNode: slicer.util.setSliceViewerLayers(background=b.GetID(), foreground=f.GetID(), foregroundOpacity=0.5))
+    self.norm_nodes_count = 0
+
+#
+# Settings Panel
+#
 
 def setUpSettingsPanel():
   if not slicer.app.commandOptions().noMainWindow:
     settingsPanel = NetstimPreferencesSettingsPanel()
     slicer.app.settingsDialog().addPanel("Lead-DBS", settingsPanel)
-
 
 class NetstimPreferencesSettingsPanel(ctk.ctkSettingsPanel):
   def __init__(self):
