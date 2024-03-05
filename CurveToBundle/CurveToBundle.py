@@ -62,11 +62,60 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
-        # Add custom widget
+        # Waypoints slider widget
         from CurveToBundleLib.Widgets.multiHandleSlider import MultiHandleSliderWidget
         self.ui.waypointsValueWidget = MultiHandleSliderWidget()
         waypointsLayout = qt.QVBoxLayout(self.ui.waypointsFrame)
         waypointsLayout.addWidget(self.ui.waypointsValueWidget)
+
+        self.ui.copyPositionsFromCurveToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerCheckForUpdates.png"))
+
+        # Spread settings
+        spreadSettingsMenu = qt.QMenu(self.ui.spreadSettingsToolButton)
+        
+        self.ui.maxSpreadSpinBox = qt.QSpinBox()
+        self.ui.maxSpreadSpinBox.minimum = 1
+        self.ui.maxSpreadSpinBox.maximum = 100
+        self.ui.maxSpreadSpinBox.value = 10
+        maxSpreadMenu = spreadSettingsMenu.addMenu("Max spread")
+        action = qt.QWidgetAction(maxSpreadMenu)
+        action.setDefaultWidget(self.ui.maxSpreadSpinBox)
+        maxSpreadMenu.addAction(action)
+
+        spreadInterpolationMenu = spreadSettingsMenu.addMenu("Interpolation")
+        self.ui.spreadInterpolationActionsGroup = qt.QActionGroup(spreadInterpolationMenu)
+        self.ui.spreadInterpolationActionsGroup.setExclusive(True)
+        for kind in ['linear', 'cubic']:
+            action = qt.QAction(kind, spreadInterpolationMenu)
+            action.setCheckable(True)
+            self.ui.spreadInterpolationActionsGroup.addAction(action)
+        action.setChecked(True)
+        spreadInterpolationMenu.addActions(self.ui.spreadInterpolationActionsGroup.actions())
+        
+        self.ui.spreadExtrapolateAction = qt.QAction("Extrapolate", spreadSettingsMenu)
+        self.ui.spreadExtrapolateAction.setCheckable(True)
+        self.ui.spreadExtrapolateAction.setChecked(True)
+        spreadSettingsMenu.addAction(self.ui.spreadExtrapolateAction)
+
+        self.ui.spreadSettingsToolButton.setMenu(spreadSettingsMenu)
+        self.ui.spreadSettingsToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerConfigure.png"))
+
+        # Fibers settings
+        fibersSettingsMenu = qt.QMenu(self.ui.fibersSettingsToolButton)
+
+        fibersSampleTypeMenu = fibersSettingsMenu.addMenu("Random type")
+        self.ui.fibersSampleTypeActionsGroup = qt.QActionGroup(fibersSampleTypeMenu)
+        self.ui.fibersSampleTypeActionsGroup.setExclusive(True)
+        for kind in ['uniform', 'normal']:
+            action = qt.QAction(kind, fibersSampleTypeMenu)
+            action.setCheckable(True)
+            self.ui.fibersSampleTypeActionsGroup.addAction(action)
+        action.setChecked(True)
+        fibersSampleTypeMenu.addActions(self.ui.fibersSampleTypeActionsGroup.actions())
+
+        self.ui.fibersSettingsToolButton.setMenu(fibersSettingsMenu)
+        self.ui.fibersSettingsToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerConfigure.png"))
+
 
         # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
         # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
@@ -89,10 +138,11 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.numberOfFibersSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.waypointSpreadSlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
-        self.ui.waypointsValueWidget.valuesChanged.connect(self.updateParameterNodeFromGUI)
-        self.ui.waypointsValueWidget.handleIndexChanged.connect(lambda: self._parameterNode.SetParameter("WaypointIndex", str(self.ui.waypointsValueWidget.getHandleIndex())))
-        self.ui.addWaypointPushButton.connect('clicked(bool)', self.addWaypoint)
-        self.ui.removeWaypointPushButton.connect('clicked(bool)', self.removeWaypoint)
+        self.ui.maxSpreadSpinBox.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
+        self.ui.copyPositionsFromCurveToolButton.connect("clicked(bool)", self.onCopyPositionsFromCurve)
+        self.ui.spreadInterpolationActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
+        self.ui.spreadExtrapolateAction.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+        self.ui.fibersSampleTypeActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -168,6 +218,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self._parameterNode is not None:
             self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
 
+        self.ui.waypointsValueWidget.setParameterNode(self._parameterNode)
+
         # Initial GUI update
         self.updateGUIFromParameterNode()
 
@@ -184,10 +236,15 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._updatingGUIFromParameterNode = True
 
         # Update node selectors and sliders
+        self.ui.waypointSpreadSlider.maximum = int(self._parameterNode.GetParameter("MaxSpread"))
+        self.ui.maxSpreadSpinBox.value = int(self._parameterNode.GetParameter("MaxSpread"))
         self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputCurve"))
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
-        self.ui.waypointsValueWidget.setHandles([x['value'] for x in json.loads(self._parameterNode.GetParameter("Waypoints"))])
+        next(filter(lambda action: action.text == self._parameterNode.GetParameter("SpreadInterpolation"), self.ui.spreadInterpolationActionsGroup.actions())).setChecked(True)
+        next(filter(lambda action: action.text == self._parameterNode.GetParameter("FibersSampleType"), self.ui.fibersSampleTypeActionsGroup.actions())).setChecked(True)
+        self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
+
         waypointIndex = int(self._parameterNode.GetParameter("WaypointIndex"))
         if waypointIndex >= 0:
             self.ui.waypointSpreadSlider.setEnabled(True)
@@ -204,8 +261,15 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.applyButton.toolTip = "Select input and output nodes"
             self.ui.applyButton.enabled = False
 
+        if not hasattr(slicer,'vtkMRMLFiberBundleNode'):
+            self.ui.outputSelector.enabled = False
+            self.ui.outputSelector.toolTip = "This module requires the SlicerDMRI extension"
+
         # All the GUI updates are done
         self._updatingGUIFromParameterNode = False
+
+        if self.ui.autoApplyCheckBox.checked:
+            self.onApplyButton()
 
     def updateParameterNodeFromGUI(self, caller=None, event=None):
         """
@@ -218,32 +282,36 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
+        self._parameterNode.SetParameter("MaxSpread", str(self.ui.maxSpreadSpinBox.value))
         self._parameterNode.SetNodeReferenceID("InputCurve", self.ui.inputSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("OutputBundle", self.ui.outputSelector.currentNodeID)
         self._parameterNode.SetParameter("NumberOfFibers", str(self.ui.numberOfFibersSliderWidget.value))
-        index = self.ui.waypointsValueWidget.getHandleIndex()
-        if index is not None:
+        self._parameterNode.SetParameter("SpreadInterpolation", [action.text for action in self.ui.spreadInterpolationActionsGroup.actions() if action.isChecked()][0])
+        self._parameterNode.SetParameter("FibersSampleType", [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0])
+        self._parameterNode.SetParameter("SpreadExtrapolate", str(bool(self.ui.spreadExtrapolateAction.isChecked())))
+
+        index = int(self._parameterNode.GetParameter("WaypointIndex"))
+        if index >= 0:
             waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-            waypoints[index]['value'] = self.ui.waypointsValueWidget.getHandleValue(index)
             waypoints[index]['spread'] = self.ui.waypointSpreadSlider.value
             self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
         
         self._parameterNode.EndModify(wasModified)
 
-    def addWaypoint(self):
-        waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-        waypoints.append({'value': 0, 'spread': 5})
+    def onCopyPositionsFromCurve(self):
+        curve = self.ui.inputSelector.currentNode()
+        if not curve:
+            return
+        waypoints = []
+        curveLength = curve.GetCurveLengthWorld()
+        spread = self.ui.maxSpreadSpinBox.value / 2.0
+        if curve.GetNumberOfControlPoints() == 1:
+            waypoints.append({"position":50, "spread":spread})
+        else:
+            for i in range(curve.GetNumberOfControlPoints()):
+                absVal = curve.GetCurveLengthBetweenStartEndPointsWorld(curve.GetCurvePointIndexFromControlPointIndex(0), curve.GetCurvePointIndexFromControlPointIndex(i))
+                waypoints.append({"position":absVal/curveLength*100, "spread":spread})
         self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
-
-    def removeWaypoint(self):
-        index = self.ui.waypointsValueWidget.getHandleIndex()
-        if index is not None:
-            waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-            if len(waypoints) == 1:
-                return
-            waypoints.pop(index)
-            self._parameterNode.SetParameter("WaypointIndex", "-1")
-            self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
 
     def onApplyButton(self):
         """
@@ -252,12 +320,22 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
 
             waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
+            spreadValues = [item['spread'] for item in waypoints]
+            spreadPositions = [item['position'] for item in waypoints]
+            spreadInterpolation = [action.text for action in self.ui.spreadInterpolationActionsGroup.actions() if action.isChecked()][0]
+            spreadExtrapolate = self.ui.spreadExtrapolateAction.isChecked()
+
+            fibersSampleType = [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0]
 
             # Compute output
             self.logic.process(self.ui.inputSelector.currentNode(), 
                                self.ui.outputSelector.currentNode(),
                                int(self.ui.numberOfFibersSliderWidget.value),
-                               waypoints)
+                               fibersSampleType,
+                               spreadValues,
+                               spreadPositions,
+                               spreadInterpolation,
+                               spreadExtrapolate)
 
 
 
@@ -303,11 +381,37 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("NumberOfFibers"):
             parameterNode.SetParameter("NumberOfFibers", "100")
         if not parameterNode.GetParameter("Waypoints"):
-            parameterNode.SetParameter("Waypoints", json.dumps([{"value":0,"spread":5},{"value":100,"spread":5}]))
+            parameterNode.SetParameter("Waypoints", json.dumps([{"position":0,"spread":5},{"position":100,"spread":5}]))
         if not parameterNode.GetParameter("WaypointIndex"):
             parameterNode.SetParameter("WaypointIndex", "-1")
+        if not parameterNode.GetParameter("MaxSpread"):
+            parameterNode.SetParameter("MaxSpread", "10")
+        if not parameterNode.GetParameter("SpreadInterpolation"):
+            parameterNode.SetParameter("SpreadInterpolation", "cubic")
+        if not parameterNode.GetParameter("SpreadExtrapolate"):
+            parameterNode.SetParameter("SpreadExtrapolate", "True")
+        if not parameterNode.GetParameter("FibersSampleType"):
+            parameterNode.SetParameter("FibersSampleType", "uniform")
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, waypoints):
+    def getInterpolatedSpreads(self, spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate, numberOfPoints):
+        if len(spreadValues) == 1:
+            return np.ones(numberOfPoints) * spreadValues[0]
+
+        spreadInterpolation = 'linear' if len(spreadValues) <= 3 else spreadInterpolation
+
+        fillValue = 'extrapolate' if spreadExtrapolate else (spreadValues[np.argmin(spreadPositions)], spreadValues[np.argmax(spreadPositions)])
+
+        from scipy.interpolate import interp1d
+        interpFunction = interp1d(spreadPositions, 
+                               spreadValues,
+                               kind = spreadInterpolation,
+                               bounds_error = False,
+                               fill_value = fillValue,
+                               assume_sorted = False)
+
+        return interpFunction(np.linspace(0, 100, numberOfPoints))
+
+    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -317,40 +421,37 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         resampledCurve.Copy(inputCurve)
         resampledCurve.ResampleCurveWorld(resampleDistance)
 
-        from scipy.interpolate import UnivariateSpline
-        waypoints.sort(key=lambda x: x['value'])
-        if len(waypoints) <= 2:
-            k = 1
-        elif len(waypoints) == 3:
-            k = 2
-        else:
-            k = 3
-        interp_func = UnivariateSpline([item['value'] for item in waypoints], 
-                               [item['spread'] for item in waypoints],
-                                k=k)
-        spreads = interp_func(np.linspace(0, 100, resampledCurve.GetNumberOfControlPoints()))
+        numberOfPoints = resampledCurve.GetNumberOfControlPoints()
+
+        spreads = self.getInterpolatedSpreads(spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate, numberOfPoints)
         
-        points = vtk.vtkPoints()
-        lines = vtk.vtkCellArray()
+        curvePoints = np.array([resampledCurve.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
+        outPoints = vtk.vtkPoints()
+        outLines = vtk.vtkCellArray()
         id = 0
         for _ in range(numberOfFibers):
-            randomTranslate = np.random.rand(3) * 2 - 1
+            if fibersSampleType == 'uniform':
+                randomTranslate = np.random.rand(3) * 2 - 1
+            elif fibersSampleType == 'normal':
+                randomTranslate = np.random.randn(3)
+            displacements = np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis]
+            transformedPoints = curvePoints + displacements          
             line = vtk.vtkPolyLine()
-            for i in range(resampledCurve.GetNumberOfControlPoints()):
-                points.InsertNextPoint(np.array(resampledCurve.GetNthControlPointPosition(i)) + randomTranslate * spreads[i])
+            for i in range(numberOfPoints):
+                outPoints.InsertNextPoint(transformedPoints[i])
                 line.GetPointIds().InsertNextId(id)
                 id += 1
-            lines.InsertNextCell(line)
+            outLines.InsertNextCell(line)
         
         slicer.mrmlScene.RemoveNode(resampledCurve)
 
         pd = vtk.vtkPolyData()
-        pd.SetPoints(points)
-        pd.SetLines(lines)
+        pd.SetPoints(outPoints)
+        pd.SetLines(outLines)
 
         outputBundle.SetAndObservePolyData(pd)
         outputBundle.CreateDefaultDisplayNodes()
-        outputBundle.GetDisplayNode().SetColorModeToScalar()
+        outputBundle.GetDisplayNode().SetColorModeToPointFiberOrientation()
 
 
 #

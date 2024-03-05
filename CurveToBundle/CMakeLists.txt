@@ -4,6 +4,9 @@ set(MODULE_NAME CurveToBundle)
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
+  CurveToBundleLib/Widgets/__init__.py
+  CurveToBundleLib/Widgets/multiHandleSlider.py
+  CurveToBundleLib/__init__.py
   )
 
 set(MODULE_PYTHON_RESOURCES
