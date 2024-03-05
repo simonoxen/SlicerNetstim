@@ -82,17 +82,16 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         action.setDefaultWidget(self.ui.maxSpreadSpinBox)
         maxSpreadMenu.addAction(action)
 
-        spreadInterpolationMenu = spreadSettingsMenu.addMenu("Interpolation")
-        self.ui.spreadInterpolationActionsGroup = qt.QActionGroup(spreadInterpolationMenu)
-        self.ui.spreadInterpolationActionsGroup.setExclusive(True)
-        for kind in ['linear', 'cubic']:
-            action = qt.QAction(kind, spreadInterpolationMenu)
+        splineOrderMenu = spreadSettingsMenu.addMenu("Spline order")
+        self.ui.splineOrderActionsGroup = qt.QActionGroup(splineOrderMenu)
+        self.ui.splineOrderActionsGroup.setExclusive(True)
+        for order in range(1,6):
+            action = qt.QAction(str(order), splineOrderMenu)
             action.setCheckable(True)
-            self.ui.spreadInterpolationActionsGroup.addAction(action)
-        action.setChecked(True)
-        spreadInterpolationMenu.addActions(self.ui.spreadInterpolationActionsGroup.actions())
+            self.ui.splineOrderActionsGroup.addAction(action)
+        splineOrderMenu.addActions(self.ui.splineOrderActionsGroup.actions())
         
-        self.ui.spreadExtrapolateAction = qt.QAction("Extrapolate", spreadSettingsMenu)
+        self.ui.spreadExtrapolateAction = qt.QAction("Extrapolate bounds", spreadSettingsMenu)
         self.ui.spreadExtrapolateAction.setCheckable(True)
         self.ui.spreadExtrapolateAction.setChecked(True)
         spreadSettingsMenu.addAction(self.ui.spreadExtrapolateAction)
@@ -103,7 +102,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Fibers settings
         fibersSettingsMenu = qt.QMenu(self.ui.fibersSettingsToolButton)
 
-        fibersSampleTypeMenu = fibersSettingsMenu.addMenu("Random type")
+        fibersSampleTypeMenu = fibersSettingsMenu.addMenu("Sample type")
         self.ui.fibersSampleTypeActionsGroup = qt.QActionGroup(fibersSampleTypeMenu)
         self.ui.fibersSampleTypeActionsGroup.setExclusive(True)
         for kind in ['uniform', 'normal']:
@@ -131,18 +130,26 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
+        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NewSceneEvent, self.setUpPassthroughModels)
+        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NodeAddedEvent, self.setUpPassthroughModels)
+        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NodeRemovedEvent, self.setUpPassthroughModels)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.startModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.endModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.passthroughModelsCheckableComboBox.checkedIndexesChanged.connect(self.updateParameterNodeFromGUI)
         self.ui.numberOfFibersSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.waypointSpreadSlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.maxSpreadSpinBox.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
         self.ui.copyPositionsFromCurveToolButton.connect("clicked(bool)", self.onCopyPositionsFromCurve)
-        self.ui.spreadInterpolationActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
+        self.ui.splineOrderActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.spreadExtrapolateAction.connect("toggled(bool)", self.updateParameterNodeFromGUI)
         self.ui.fibersSampleTypeActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
+
+        self.setUpPassthroughModels()
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -162,6 +169,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         # Make sure parameter node exists and observed
         self.initializeParameterNode()
+        self.setUpPassthroughModels()
 
     def exit(self):
         """
@@ -184,6 +192,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If this module is shown while the scene is closed then recreate a new parameter node immediately
         if self.parent.isEntered:
             self.initializeParameterNode()
+            self.setUpPassthroughModels()
 
     def initializeParameterNode(self):
         """
@@ -223,6 +232,21 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Initial GUI update
         self.updateGUIFromParameterNode()
 
+    def setUpPassthroughModels(self, caller=None, event=None):
+        self._updatingGUIFromParameterNode = True
+
+        self.ui.passthroughModelsCheckableComboBox.clear()
+        modelNodes = slicer.mrmlScene.GetNodesByClass("vtkMRMLModelNode")
+        modelNodes.UnRegister(modelNodes)
+        for i in range(modelNodes.GetNumberOfItems()):
+            modelNode = modelNodes.GetItemAsObject(i)
+            if not modelNode.GetHideFromEditors() and (hasattr(slicer,'vtkMRMLFiberBundleNode') and not isinstance(modelNode, slicer.vtkMRMLFiberBundleNode)):
+                self.ui.passthroughModelsCheckableComboBox.addItem('%s___%s' % (modelNode.GetName(), modelNode.GetID()))
+                if self._parameterNode and modelNode.GetID() in self._parameterNode.GetParameter("PassthroughModels").split(','):
+                    self.ui.passthroughModelsCheckableComboBox.model().item(self.ui.passthroughModelsCheckableComboBox.count-1,0).setCheckState(qt.Qt.Checked)
+        
+        self._updatingGUIFromParameterNode = False
+
     def updateGUIFromParameterNode(self, caller=None, event=None):
         """
         This method is called whenever parameter node is changed.
@@ -237,13 +261,24 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Update node selectors and sliders
         self.ui.waypointSpreadSlider.maximum = int(self._parameterNode.GetParameter("MaxSpread"))
+        self.ui.waypointSpreadSlider.singleStep = float(self._parameterNode.GetParameter("MaxSpread")) / 50.0
         self.ui.maxSpreadSpinBox.value = int(self._parameterNode.GetParameter("MaxSpread"))
         self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputCurve"))
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
+        self.ui.startModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("StartModel"))
+        self.ui.endModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("EndModel"))
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
-        next(filter(lambda action: action.text == self._parameterNode.GetParameter("SpreadInterpolation"), self.ui.spreadInterpolationActionsGroup.actions())).setChecked(True)
+        next(filter(lambda action: action.text == self._parameterNode.GetParameter("SplineOrder"), self.ui.splineOrderActionsGroup.actions())).setChecked(True)
         next(filter(lambda action: action.text == self._parameterNode.GetParameter("FibersSampleType"), self.ui.fibersSampleTypeActionsGroup.actions())).setChecked(True)
         self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
+
+        checkedIDs = self._parameterNode.GetParameter("PassthroughModels").split(',')
+        if checkedIDs:
+            for i in range(self.ui.passthroughModelsCheckableComboBox.count):
+                item = self.ui.passthroughModelsCheckableComboBox.model().item(i,0)
+                data = item.data()
+                if data:
+                    item.setCheckState(qt.Qt.Checked if any([data.find(id)>=0 for id in checkedIDs]) else qt.Qt.Unchecked)
 
         waypointIndex = int(self._parameterNode.GetParameter("WaypointIndex"))
         if waypointIndex >= 0:
@@ -285,8 +320,11 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetParameter("MaxSpread", str(self.ui.maxSpreadSpinBox.value))
         self._parameterNode.SetNodeReferenceID("InputCurve", self.ui.inputSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("OutputBundle", self.ui.outputSelector.currentNodeID)
+        self._parameterNode.SetNodeReferenceID("StartModel", self.ui.startModelSelector.currentNodeID)
+        self._parameterNode.SetNodeReferenceID("EndModel", self.ui.endModelSelector.currentNodeID)
+        self._parameterNode.SetParameter("PassthroughModels", ','.join([idx.data().split('___')[-1] for idx in self.ui.passthroughModelsCheckableComboBox.checkedIndexes()]))
         self._parameterNode.SetParameter("NumberOfFibers", str(self.ui.numberOfFibersSliderWidget.value))
-        self._parameterNode.SetParameter("SpreadInterpolation", [action.text for action in self.ui.spreadInterpolationActionsGroup.actions() if action.isChecked()][0])
+        self._parameterNode.SetParameter("SplineOrder", [action.text for action in self.ui.splineOrderActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("FibersSampleType", [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("SpreadExtrapolate", str(bool(self.ui.spreadExtrapolateAction.isChecked())))
 
@@ -322,10 +360,12 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
             spreadValues = [item['spread'] for item in waypoints]
             spreadPositions = [item['position'] for item in waypoints]
-            spreadInterpolation = [action.text for action in self.ui.spreadInterpolationActionsGroup.actions() if action.isChecked()][0]
+            splineOrder = int([action.text for action in self.ui.splineOrderActionsGroup.actions() if action.isChecked()][0])
             spreadExtrapolate = self.ui.spreadExtrapolateAction.isChecked()
 
             fibersSampleType = [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0]
+
+            passthroughModels = [slicer.mrmlScene.GetNodeByID(id) for id in self._parameterNode.GetParameter("PassthroughModels").split(',')]
 
             # Compute output
             self.logic.process(self.ui.inputSelector.currentNode(), 
@@ -334,8 +374,11 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                fibersSampleType,
                                spreadValues,
                                spreadPositions,
-                               spreadInterpolation,
-                               spreadExtrapolate)
+                               splineOrder,
+                               spreadExtrapolate,
+                               self.ui.startModelSelector.currentNode(),
+                               self.ui.endModelSelector.currentNode(),
+                               passthroughModels)
 
 
 
@@ -386,32 +429,69 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("WaypointIndex", "-1")
         if not parameterNode.GetParameter("MaxSpread"):
             parameterNode.SetParameter("MaxSpread", "10")
-        if not parameterNode.GetParameter("SpreadInterpolation"):
-            parameterNode.SetParameter("SpreadInterpolation", "cubic")
+        if not parameterNode.GetParameter("SplineOrder"):
+            parameterNode.SetParameter("SplineOrder", "3")
         if not parameterNode.GetParameter("SpreadExtrapolate"):
             parameterNode.SetParameter("SpreadExtrapolate", "True")
         if not parameterNode.GetParameter("FibersSampleType"):
             parameterNode.SetParameter("FibersSampleType", "uniform")
 
-    def getInterpolatedSpreads(self, spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate, numberOfPoints):
-        if len(spreadValues) == 1:
+    def getInterpolatedSpreads(self, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints):
+        numberOfItemsToInterpolate = len(spreadValues)
+        
+        if numberOfItemsToInterpolate == 1:
             return np.ones(numberOfPoints) * spreadValues[0]
+        
+        # sort according to position
+        spreadValues, spreadPositions = zip(*sorted(zip(spreadValues, spreadPositions), key=lambda x: x[1]))
+        
+        if numberOfItemsToInterpolate <= splineOrder:
+            splineOrder = numberOfItemsToInterpolate-1
 
-        spreadInterpolation = 'linear' if len(spreadValues) <= 3 else spreadInterpolation
+        ext = 'extrapolate' if spreadExtrapolate else 'const'
 
-        fillValue = 'extrapolate' if spreadExtrapolate else (spreadValues[np.argmin(spreadPositions)], spreadValues[np.argmax(spreadPositions)])
-
-        from scipy.interpolate import interp1d
-        interpFunction = interp1d(spreadPositions, 
+        from scipy.interpolate import UnivariateSpline
+        interpFunction = UnivariateSpline(spreadPositions, 
                                spreadValues,
-                               kind = spreadInterpolation,
-                               bounds_error = False,
-                               fill_value = fillValue,
-                               assume_sorted = False)
+                               k = splineOrder,
+                               ext = ext)
 
         return interpFunction(np.linspace(0, 100, numberOfPoints))
+    
+    def applyConstrains(self, points, startModel, endModel, passthroughModels):
+        startIndex = 0
+        endIndex = points.shape[0]
+        if startModel:
+            startDistanceFilter = vtk.vtkImplicitPolyDataDistance()
+            startDistanceFilter.SetInput(startModel.GetPolyData())
+            while startIndex != endIndex:
+                distance = startDistanceFilter.EvaluateFunction(points[startIndex])
+                if distance < 0:
+                    break
+                startIndex += 1
+        if endModel:
+            endDistanceFilter = vtk.vtkImplicitPolyDataDistance()
+            endDistanceFilter.SetInput(endModel.GetPolyData())
+            while endIndex != startIndex:
+                distance = endDistanceFilter.EvaluateFunction(points[endIndex-1])
+                if distance < 0:
+                    break
+                endIndex -= 1
+        for model in passthroughModels:
+            auxPoints = self.applyConstrains(points[startIndex:endIndex], model, None, [])
+            if auxPoints.shape[0] < 2:
+                startIndex = endIndex
+                break
+        return points[startIndex:endIndex]
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate):
+    def getPointDisplacements(self, fibersSampleType, spreads, numberOfPoints):
+        if fibersSampleType == 'uniform':
+            randomTranslate = np.random.rand(3) * 2 - 1
+        elif fibersSampleType == 'normal':
+            randomTranslate = np.random.randn(3)
+        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis]
+
+    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, passthroughModels = []):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -423,22 +503,21 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
 
         numberOfPoints = resampledCurve.GetNumberOfControlPoints()
 
-        spreads = self.getInterpolatedSpreads(spreadValues, spreadPositions, spreadInterpolation, spreadExtrapolate, numberOfPoints)
+        spreads = self.getInterpolatedSpreads(spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints)
         
         curvePoints = np.array([resampledCurve.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
         outPoints = vtk.vtkPoints()
         outLines = vtk.vtkCellArray()
         id = 0
         for _ in range(numberOfFibers):
-            if fibersSampleType == 'uniform':
-                randomTranslate = np.random.rand(3) * 2 - 1
-            elif fibersSampleType == 'normal':
-                randomTranslate = np.random.randn(3)
-            displacements = np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis]
-            transformedPoints = curvePoints + displacements          
+            displacements = self.getPointDisplacements(fibersSampleType, spreads, numberOfPoints)
+            transformedPoints = curvePoints + displacements
+            validPoints = self.applyConstrains(transformedPoints, startModel, endModel, passthroughModels)
+            if validPoints.shape[0] < 2:
+                continue
             line = vtk.vtkPolyLine()
-            for i in range(numberOfPoints):
-                outPoints.InsertNextPoint(transformedPoints[i])
+            for i in range(validPoints.shape[0]):
+                outPoints.InsertNextPoint(validPoints[i])
                 line.GetPointIds().InsertNextId(id)
                 id += 1
             outLines.InsertNextCell(line)
