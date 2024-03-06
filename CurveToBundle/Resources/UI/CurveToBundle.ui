@@ -240,8 +240,11 @@
           <string>vtkMRMLModelNode</string>
          </stringlist>
         </property>
+        <property name="showChildNodeTypes">
+         <bool>false</bool>
+        </property>
         <property name="hideChildNodeTypes">
-         <stringlist notr="true"/>
+         <stringlist/>
         </property>
         <property name="noneEnabled">
          <bool>true</bool>
@@ -253,7 +256,7 @@
          <bool>false</bool>
         </property>
         <property name="interactionNodeSingletonTag">
-         <string notr="true"/>
+         <string>Singleton</string>
         </property>
        </widget>
       </item>
