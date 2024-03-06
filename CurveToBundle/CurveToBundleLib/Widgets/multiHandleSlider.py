@@ -25,6 +25,7 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
         self._parameterNodeObserverTag = None
 
         self._mouseOffset = 0
+        self._shouldMoveHandle = False
 
         self._timer = qt.QTimer()
         self._timer.setSingleShot(True)
@@ -94,13 +95,14 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
         groove_start = groove_rect.left() 
 
         idx = int(self._parameterNode.GetParameter("WaypointIndex"))
+        otherPen = qt.Qt.NoPen if self._parameterNode.GetParameter("SpreadModify") == "Selected" else qt.QPen()
         for i,(pos,spread) in enumerate(zip(*self.getWaypointsPositionsSpreads())):
             handle_pos = groove_start + int(groove_length * (pos - self.minimum) / (self.maximum - self.minimum))
             handle_center = qt.QPointF(handle_pos, groove_rect.center().y()) 
             handle_radius = self.style().pixelMetric(qt.QStyle.PM_SliderLength) / 2
             handle_rect = qt.QRect(handle_center.x() - handle_radius, handle_center.y() - handle_radius, 2 * handle_radius, 2 * handle_radius)
             painter.setBrush(qt.QColor(*PARULA[spread]))
-            painter.setPen(qt.QPen() if i==idx else qt.Qt.NoPen)
+            painter.setPen(qt.QPen() if i==idx else otherPen)
             painter.drawEllipse(handle_rect)
 
     def mousePressEvent(self, event):
@@ -123,11 +125,15 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
                     self._parameterNode.SetParameter("WaypointIndex", str(i))
                     self._mouseOffset = event.pos().x() - handle_center.x()
                     qt.QToolTip.showText(event.globalPos(), '%d'%handle)
+                    self._shouldMoveHandle = True
                 return
+        self._shouldMoveHandle = False
         if shouldInsertOrDelete:
             self.addWaypoint(self.minimum + (event.pos().x() - groove_rect.left()) / groove_rect.width() * (self.maximum - self.minimum))
 
     def mouseMoveEvent(self, event):
+        if not self._shouldMoveHandle:
+            return
         opt = qt.QStyleOptionSlider()
         self.initStyleOption(opt) 
         idx = int(self._parameterNode.GetParameter("WaypointIndex"))

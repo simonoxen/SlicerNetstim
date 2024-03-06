@@ -556,11 +556,9 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
-        resampleDistance = 1
-
         resampledCurve = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsCurveNode")
         resampledCurve.Copy(inputCurve)
-        resampledCurve.ResampleCurveWorld(resampleDistance)
+        resampledCurve.ResampleCurveWorld(1) # 1mm spacing
 
         numberOfPoints = resampledCurve.GetNumberOfControlPoints()
 
