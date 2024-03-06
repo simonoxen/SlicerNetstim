@@ -606,7 +606,8 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
             randomTranslate = np.random.rand(3) * 2 - 1
         elif fibersSampleType == 'normal':
             randomTranslate = np.random.randn(3)
-        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis]
+        sin =  np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, (numberOfPoints/25)*np.pi, numberOfPoints))
+        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sin[:,np.newaxis]
 
     def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, passthroughModels = []):
         if not inputCurve or not outputBundle:

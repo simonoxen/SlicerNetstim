@@ -29,6 +29,7 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
 
         self._mouseOffset = 0
         self._shouldMoveHandle = False
+        self._previouslyClickedPoint = -1
 
         self._addRemoveTimer = qt.QTimer()
         self._addRemoveTimer.setSingleShot(True)
@@ -127,7 +128,7 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
                     self._parameterNode.SetParameter("WaypointIndex", str(i))
                     self._mouseOffset = event.pos().x() - handle_center.x()
                     qt.QToolTip.showText(event.globalPos(), '%d'%handle)
-                    self._shouldMoveHandle = True
+                    self._shouldMoveHandle = (i == self._previouslyClickedPoint)
                     self._previewTimer.start(1000)
                 return
         self._shouldMoveHandle = False
@@ -154,7 +155,7 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        self._shouldMoveHandle = False
+        self._previouslyClickedPoint = int(self._parameterNode.GetParameter("WaypointIndex"))
         self.removePreview()
 
     def setUpPreview(self):
@@ -164,7 +165,9 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
         self._previewMarkupsNode.GetDisplayNode().SetVisibility(False)
         self._previewMarkupsNode.SetName("Preview")
         self._previewMarkupsNode.GetDisplayNode().SetSelectedColor(PARULA[spread][0]/255, PARULA[spread][1]/255, PARULA[spread][2]/255)
-        self._previewMarkupsNode.GetDisplayNode().SetGlyphScale(2)
+        self._previewMarkupsNode.GetDisplayNode().SetGlyphType(2)
+        self._previewMarkupsNode.GetDisplayNode().UseGlyphScaleOff()
+        self._previewMarkupsNode.GetDisplayNode().SetGlyphSize(float(self._parameterNode.GetParameter("MaxSpread"))*2)
         self._previewMarkupsNode.GetDisplayNode().SetTextScale(0)
         self._previewMarkupsNode.AddControlPoint([0,0,0])
         self.updatePreview()
