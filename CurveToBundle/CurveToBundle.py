@@ -286,14 +286,14 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return displayName
 
     def inpuNodeChanged(self, incomingNode):
-        if not self._parameterNode or not self._parameterNode.GetParameter("InputCurve"):
+        self.setUpCopyPositionMenu()
+        if not self._parameterNode:
             return
         previousNode = self._parameterNode.GetNodeReference("InputCurve")
-        if previousNode and previousNode != incomingNode and hasattr(self, '_inputNodeObserverTag'):
+        if previousNode and (previousNode != incomingNode) and hasattr(self, '_inputNodeObserverTag'):
             previousNode.RemoveObserver(self._inputNodeObserverTag)
         if incomingNode:
             self._inputNodeObserverTag = incomingNode.AddObserver(incomingNode.PointModifiedEvent, self.onMarkupsModified)
-        self.setUpCopyPositionMenu()
 
     def onMarkupsModified(self, caller, event):
         self.setUpCopyPositionMenu()
