@@ -57,12 +57,22 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
             if len(waypoints) == 1:
                 return
             waypoints.pop(n)
-            self._parameterNode.SetParameter("WaypointIndex", "-1")
+            self._parameterNode.SetParameter("WaypointIndex", str(max(0, n-1)))
             self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
 
     def addWaypoint(self, pos):
         waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-        waypoints.append({'position': pos, 'spread': float(self._parameterNode.GetParameter("MaxSpread"))/2})
+        sortedPos, sortedSpreads = zip(*sorted(zip([x['position'] for x in waypoints], [x['spread'] for x in waypoints]), key=lambda x: x[0]))
+        for i,p in enumerate((0,) + sortedPos + (100,)):
+            if p > pos:
+                break
+        if i==1:
+            spread = sortedSpreads[0]
+        elif i==len(sortedPos)+1:
+            spread = sortedSpreads[-1]
+        else:
+            spread = (sortedSpreads[i-2] + sortedSpreads[i-1])/2
+        waypoints.append({'position': pos, 'spread': spread})
         self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
         self._parameterNode.SetParameter("WaypointIndex", str(len(waypoints)-1))
 
