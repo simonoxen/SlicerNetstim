@@ -32,6 +32,7 @@
         <property name="nodeTypes">
          <stringlist notr="true">
           <string>vtkMRMLMarkupsCurveNode</string>
+          <string>vtkMRMLMarkupsClosedCurveNode</string>
          </stringlist>
         </property>
         <property name="showChildNodeTypes">
@@ -158,7 +159,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="resetWaypointsToolButton">
+          <widget class="QToolButton" name="updateWaypointsToolButton">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
              <horstretch>0</horstretch>

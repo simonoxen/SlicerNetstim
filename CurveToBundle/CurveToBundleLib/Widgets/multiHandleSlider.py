@@ -38,11 +38,12 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
             self._parameterNodeObserverTag = self._parameterNode.AddObserver(vtk.vtkCommand.ModifiedEvent, self.updateFromParameterNode)
 
     def updateFromParameterNode(self, caller, event):
-        waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-        maxSpread = int(self._parameterNode.GetParameter("MaxSpread"))
-        waypoints = [{'position': x['position'], 'spread': min(x['spread'],maxSpread)} for x in waypoints]
-        self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
-        self.update()
+        if self._parameterNode is not None and self._parameterNode.GetParameter("Waypoints"):
+            waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
+            maxSpread = int(self._parameterNode.GetParameter("MaxSpread"))
+            waypoints = [{'position': x['position'], 'spread': min(x['spread'],maxSpread)} for x in waypoints]
+            self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
+            self.update()
 
     def getWaypointsValues(self):
         return [x['position'] for x in json.loads(self._parameterNode.GetParameter("Waypoints"))]
