@@ -134,6 +134,15 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         action.setChecked(True)
         fibersSampleTypeMenu.addActions(self.ui.fibersSampleTypeActionsGroup.actions())
 
+        sineCyclesMenu = fibersSettingsMenu.addMenu("Sine Cycles")
+        self.ui.sineCycles = qt.QSpinBox()
+        self.ui.sineCycles.minimum = 0
+        self.ui.sineCycles.maximum = 10
+        self.ui.sineCycles.value = 2
+        action = qt.QWidgetAction(sineCyclesMenu)
+        action.setDefaultWidget(self.ui.sineCycles)
+        sineCyclesMenu.addAction(action)
+
         self.ui.fibersSettingsToolButton.setMenu(fibersSettingsMenu)
         self.ui.fibersSettingsToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerConfigure.png"))
 
@@ -171,6 +180,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.spreadExtrapolateAction.connect("toggled(bool)", self.updateParameterNodeFromGUI)
         self.ui.fibersSampleTypeActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.spreadModifyActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
+        self.ui.sineCycles.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
 
         self.ui.waypointSpreadSlider.connect("valueChanged(double)", self.updateSpreadsFromSlider)
 
@@ -331,6 +341,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
         self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
+        self.ui.sineCycles.value = int(self._parameterNode.GetParameter("SineCycles"))
 
         inputIsOpenCurve = not isinstance(self.ui.inputSelector.currentNode(), slicer.vtkMRMLMarkupsClosedCurveNode)
         self.ui.startModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("StartModel") if inputIsOpenCurve else None)
@@ -400,6 +411,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetParameter("SplineOrder", [action.text for action in self.ui.splineOrderActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("FibersSampleType", [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("SpreadModify", [action.text for action in self.ui.spreadModifyActionsGroup.actions() if action.isChecked()][0])
+        self._parameterNode.SetParameter("SineCycles", str(self.ui.sineCycles.value))
 
         self._parameterNode.EndModify(wasModified)
 
@@ -471,6 +483,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                self.ui.outputSelector.currentNode(),
                                int(self.ui.numberOfFibersSliderWidget.value),
                                fibersSampleType,
+                               self.ui.sineCycles.value,
                                spreadValues,
                                spreadPositions,
                                splineOrder,
@@ -536,6 +549,8 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("SpreadExtrapolate", "True")
         if not parameterNode.GetParameter("FibersSampleType"):
             parameterNode.SetParameter("FibersSampleType", "uniform")
+        if not parameterNode.GetParameter("SineCycles"):
+            parameterNode.SetParameter("SineCycles", "2")
 
     def getInterpolatedSpreads(self, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints, inputIsClosedCurve):
         numberOfItemsToInterpolate = len(spreadValues)
@@ -601,15 +616,15 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
                 break
         return points[startIndex:endIndex]
 
-    def getPointDisplacements(self, fibersSampleType, spreads, numberOfPoints):
+    def getPointDisplacements(self, fibersSampleType, sineCycles, spreads, numberOfPoints):
         if fibersSampleType == 'uniform':
             randomTranslate = np.random.rand(3) * 2 - 1
         elif fibersSampleType == 'normal':
             randomTranslate = np.random.randn(3)
-        sin =  np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, (numberOfPoints/25)*np.pi, numberOfPoints))
-        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sin[:,np.newaxis]
+        sine = np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, sineCycles*np.pi, numberOfPoints))
+        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sine[:,np.newaxis]
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, passthroughModels = []):
+    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, passthroughModels = []):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -628,7 +643,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         outLines = vtk.vtkCellArray()
         id = 0
         for _ in range(numberOfFibers):
-            displacements = self.getPointDisplacements(fibersSampleType, spreads, numberOfPoints)
+            displacements = self.getPointDisplacements(fibersSampleType, sineCycles, spreads, numberOfPoints)
             transformedPoints = curvePoints + displacements
             validPoints = self.applyConstrains(transformedPoints, startModel, endModel, passthroughModels)
             if validPoints.shape[0] < 2:
