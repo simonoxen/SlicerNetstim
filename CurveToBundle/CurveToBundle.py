@@ -275,10 +275,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             previousNode.RemoveObserver(self._inputNodeObserverTag)
         if incomingNode:
             self._inputNodeObserverTag = incomingNode.AddObserver(incomingNode.PointModifiedEvent, self.onMarkupsModified)
-            print('here')
 
     def onMarkupsModified(self, caller, event):
-        print('here2')
         if self.ui.autoApplyCheckBox.checked:
             self.onApplyButton()
 
