@@ -2,6 +2,7 @@ import qt
 import vtk
 from slicer.util import VTKObservationMixin
 import json
+import slicer
 
 import CurveToBundle
 class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
@@ -29,8 +30,13 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
         self._mouseOffset = 0
         self._shouldMoveHandle = False
 
-        self._timer = qt.QTimer()
-        self._timer.setSingleShot(True)
+        self._addRemoveTimer = qt.QTimer()
+        self._addRemoveTimer.setSingleShot(True)
+
+        self._previewTimer = qt.QTimer()
+        self._previewTimer.setSingleShot(True)
+        self._previewTimer.timeout.connect(self.setUpPreview)
+        self._previewMarkupsNode = None
 
     def setParameterNode(self, parameterNode):
         if self._parameterNode:
@@ -104,8 +110,8 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
     def mousePressEvent(self, event):
         if event.button() != qt.Qt.LeftButton:
             return
-        shouldInsertOrDelete = self._timer.isActive()
-        self._timer.start(250)
+        shouldInsertOrDelete = self._addRemoveTimer.isActive()
+        self._addRemoveTimer.start(250)
         opt = qt.QStyleOptionSlider()
         self.initStyleOption(opt)  
         groove_rect = self.style().subControlRect(qt.QStyle.CC_Slider, opt, self.style().SC_SliderGroove)
@@ -122,12 +128,15 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
                     self._mouseOffset = event.pos().x() - handle_center.x()
                     qt.QToolTip.showText(event.globalPos(), '%d'%handle)
                     self._shouldMoveHandle = True
+                    self._previewTimer.start(1000)
                 return
         self._shouldMoveHandle = False
         if shouldInsertOrDelete:
             self.addWaypoint(self.minimum + (event.pos().x() - groove_rect.left()) / groove_rect.width() * (self.maximum - self.minimum))
 
     def mouseMoveEvent(self, event):
+        if self._previewTimer.isActive():
+            self.removePreview()
         if not self._shouldMoveHandle:
             return
         opt = qt.QStyleOptionSlider()
@@ -141,7 +150,43 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
             value = self.minimum + (handle_pos - groove_rect.left()) / groove_rect.width() * (self.maximum+0.5 - self.minimum) # +0.5 to get to 100
             qt.QToolTip.showText(event.globalPos(), '%d'%value)
             self.setNthWaypointValue(idx, value)
+            self.updatePreview()
             self.update()
+
+    def mouseReleaseEvent(self, event):
+        self._shouldMoveHandle = False
+        self.removePreview()
+
+    def setUpPreview(self):
+        _, spreads = self.getWaypointsPositionsSpreads()
+        spread = spreads[int(self._parameterNode.GetParameter("WaypointIndex"))]
+        self._previewMarkupsNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsFiducialNode")
+        self._previewMarkupsNode.GetDisplayNode().SetVisibility(False)
+        self._previewMarkupsNode.SetName("Preview")
+        self._previewMarkupsNode.GetDisplayNode().SetSelectedColor(PARULA[spread][0]/255, PARULA[spread][1]/255, PARULA[spread][2]/255)
+        self._previewMarkupsNode.GetDisplayNode().SetGlyphScale(2)
+        self._previewMarkupsNode.GetDisplayNode().SetTextScale(0)
+        self._previewMarkupsNode.AddControlPoint([0,0,0])
+        self.updatePreview()
+
+    def updatePreview(self):
+        if not self._previewMarkupsNode:
+            return
+        inputCurve = self._parameterNode.GetNodeReference("InputCurve")
+        if inputCurve is None:
+            return
+        currentWaypointPosition = self.getWaypointsValues()[int(self._parameterNode.GetParameter("WaypointIndex"))]
+        distanceFromStartPoint = inputCurve.GetCurveLengthWorld() * currentWaypointPosition / 100
+        worldPosition = [0.0,0.0,0.0]
+        inputCurve.GetPositionAlongCurveWorld(worldPosition, inputCurve.GetCurvePointIndexFromControlPointIndex(0), distanceFromStartPoint)
+        self._previewMarkupsNode.SetNthControlPointPositionWorld(0, worldPosition)
+        self._previewMarkupsNode.GetDisplayNode().SetVisibility(True)
+
+    def removePreview(self):
+        self._previewTimer.stop()
+        if self._previewMarkupsNode:
+            slicer.mrmlScene.RemoveNode(self._previewMarkupsNode)
+            self._previewMarkupsNode = None
 
 
 PARULA = [[ 62,    39,   169],
