@@ -438,10 +438,11 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             curve = self.ui.inputSelector.currentNode()
             if not curve:
                 return
-            waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-            spread = self.ui.maxSpreadSpinBox.value / 2.0
             absVal = curve.GetCurveLengthBetweenStartEndPointsWorld(curve.GetCurvePointIndexFromControlPointIndex(0), curve.GetCurvePointIndexFromControlPointIndex(idx))
-            waypoints.append({"position":absVal/curve.GetCurveLengthWorld()*100, "spread":spread})
+            newPosition = absVal / curve.GetCurveLengthWorld() * 100
+            waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
+            spread = self.logic.getSpreadForNewPosition([item['position'] for item in waypoints], [item['spread'] for item in waypoints], newPosition)
+            waypoints.append({"position":newPosition, "spread":spread})
             waypointIndex = len(waypoints)-1
 
         wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
@@ -650,7 +651,18 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         outputBundle.CreateDefaultDisplayNodes()
         outputBundle.GetDisplayNode().SetColorModeToPointFiberOrientation()
 
-
+    def getSpreadForNewPosition(self, positions, spreads, newPosition):
+        sortedPos, sortedSpreads = zip(*sorted(zip(positions, spreads), key=lambda x: x[0]))
+        for i,p in enumerate((0,) + sortedPos + (100,)):
+            if p > newPosition:
+                break
+        if i==1:
+            spread = sortedSpreads[0]
+        elif i==len(sortedPos)+1:
+            spread = sortedSpreads[-1]
+        else:
+            spread = (sortedSpreads[i-2] + sortedSpreads[i-1])/2
+        return spread
 #
 # CurveToBundleTest
 #

@@ -2,6 +2,8 @@ import qt
 import vtk
 from slicer.util import VTKObservationMixin
 import json
+
+import CurveToBundle
 class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
 
     def __init__(self):
@@ -64,16 +66,9 @@ class MultiHandleSliderWidget(qt.QSlider, VTKObservationMixin):
 
     def addWaypoint(self, pos):
         waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
-        sortedPos, sortedSpreads = zip(*sorted(zip([x['position'] for x in waypoints], [x['spread'] for x in waypoints]), key=lambda x: x[0]))
-        for i,p in enumerate((0,) + sortedPos + (100,)):
-            if p > pos:
-                break
-        if i==1:
-            spread = sortedSpreads[0]
-        elif i==len(sortedPos)+1:
-            spread = sortedSpreads[-1]
-        else:
-            spread = (sortedSpreads[i-2] + sortedSpreads[i-1])/2
+        positions = [x['position'] for x in waypoints]
+        spreads = [x['spread'] for x in waypoints]
+        spread = CurveToBundle.CurveToBundleLogic().getSpreadForNewPosition(positions, spreads, pos)
         waypoints.append({'position': pos, 'spread': spread})
         self._parameterNode.SetParameter("Waypoints", json.dumps(waypoints))
         self._parameterNode.SetParameter("WaypointIndex", str(len(waypoints)-1))
