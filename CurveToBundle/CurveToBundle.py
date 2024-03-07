@@ -153,6 +153,26 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         action.setDefaultWidget(self.ui.sineCyclesSlider)
         sineCyclesMenu.addAction(action)
 
+        fibersDirectionlaityMenu = fibersSettingsMenu.addMenu("Directionality")
+        self.ui.fibersDirectionalitySlider = ctk.ctkSliderWidget()
+        self.ui.fibersDirectionalitySlider.minimum = 0
+        self.ui.fibersDirectionalitySlider.maximum = 1
+        self.ui.fibersDirectionalitySlider.value = 0
+        self.ui.fibersDirectionalitySlider.singleStep = 0.1
+        action = qt.QWidgetAction(fibersDirectionlaityMenu)
+        action.setDefaultWidget(self.ui.fibersDirectionalitySlider)
+        fibersDirectionlaityMenu.addAction(action)
+
+        fibersAngleMenu = fibersSettingsMenu.addMenu("Angle")
+        self.ui.fibersAngleSlider = ctk.ctkSliderWidget()
+        self.ui.fibersAngleSlider.minimum = 0
+        self.ui.fibersAngleSlider.maximum = 180
+        self.ui.fibersAngleSlider.value = 0
+        self.ui.fibersAngleSlider.singleStep = 1
+        action = qt.QWidgetAction(fibersAngleMenu)
+        action.setDefaultWidget(self.ui.fibersAngleSlider)
+        fibersAngleMenu.addAction(action)
+
         self.ui.fibersSettingsToolButton.setMenu(fibersSettingsMenu)
         self.ui.fibersSettingsToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerConfigure.png"))
 
@@ -189,6 +209,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.fibersSampleTypeActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.spreadModifyActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.sineCyclesSlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        self.ui.fibersDirectionalitySlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+        self.ui.fibersAngleSlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
 
         self.ui.waypointSpreadSlider.connect("valueChanged(double)", self.updateSpreadsFromSlider)
 
@@ -322,6 +344,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
         self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
         self.ui.sineCyclesSlider.value = float(self._parameterNode.GetParameter("SineCycles"))
+        self.ui.fibersDirectionalitySlider.value = float(self._parameterNode.GetParameter("FibersDirectionality"))
+        self.ui.fibersAngleSlider.value = float(self._parameterNode.GetParameter("FibersAngle"))
 
         inputIsOpenCurve = not isinstance(self.ui.inputSelector.currentNode(), slicer.vtkMRMLMarkupsClosedCurveNode)
         self.ui.startModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("StartModel") if inputIsOpenCurve else None)
@@ -387,6 +411,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetParameter("FibersSampleType", [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("SpreadModify", [action.text for action in self.ui.spreadModifyActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("SineCycles", str(self.ui.sineCyclesSlider.value))
+        self._parameterNode.SetParameter("FibersDirectionality", str(self.ui.fibersDirectionalitySlider.value))
+        self._parameterNode.SetParameter("FibersAngle", str(self.ui.fibersAngleSlider.value))
 
         self._parameterNode.EndModify(wasModified)
 
@@ -460,6 +486,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                int(self.ui.numberOfFibersSliderWidget.value),
                                fibersSampleType,
                                self.ui.sineCyclesSlider.value,
+                               self.ui.fibersDirectionalitySlider.value,
+                               self.ui.fibersAngleSlider.value,
                                spreadValues,
                                spreadPositions,
                                splineOrder,
@@ -528,6 +556,10 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("FibersSampleType", "normal")
         if not parameterNode.GetParameter("SineCycles"):
             parameterNode.SetParameter("SineCycles", "2")
+        if not parameterNode.GetParameter("FibersDirectionality"):
+            parameterNode.SetParameter("FibersDirectionality", "0")
+        if not parameterNode.GetParameter("FibersAngle"):
+            parameterNode.SetParameter("FibersAngle", "0")
 
     def getInterpolatedSpreads(self, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints, inputIsClosedCurve):
         numberOfItemsToInterpolate = len(spreadValues)
@@ -609,15 +641,46 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
                 extractPolyData.Update()
                 pd.DeepCopy(extractPolyData.GetOutput())
 
-    def getPointDisplacements(self, fibersSampleType, sineCycles, spreads, numberOfPoints):
+    def getPointDisplacements(self, fibersSampleType, sineCycles, fibersDirectionality, normals, spreads, numberOfPoints):
         if fibersSampleType == 'uniform':
-            randomTranslate = np.random.rand(3) * 2 - 1
+            randomDirection = np.random.rand(3) * 2 - 1
         elif fibersSampleType == 'normal':
-            randomTranslate = np.random.randn(3)
-        sine = np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, sineCycles*np.pi, numberOfPoints))
-        return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sine[:,np.newaxis]
+            randomDirection = np.random.randn(3)
+        randomDirection /= np.linalg.norm(randomDirection)
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, insideModels = [], outsideModels = []):
+        directionalSpreads = np.abs(np.dot(normals, randomDirection))
+        spreads = spreads * ((1-fibersDirectionality) + fibersDirectionality * directionalSpreads)
+        sine = np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, sineCycles*np.pi, numberOfPoints))
+        return np.tile(randomDirection, (numberOfPoints,1)) * spreads[:,np.newaxis] * sine[:,np.newaxis]
+
+    def getNormals(self, curve, fibersAngle):
+        p = vtk.vtkPoints()
+        curve.GetControlPointPositionsWorld(p)
+        a = vtk.vtkCellArray()
+        l = vtk.vtkPolyLine()
+        for i in range(curve.GetNumberOfControlPoints()):
+            l.GetPointIds().InsertNextId(i)
+        a.InsertNextCell(l)
+
+        firstPointsDirection = np.array(p.GetPoint(1)) - np.array(p.GetPoint(0))
+        firstPointsDirection /= np.linalg.norm(firstPointsDirection)
+        firstPointsNormal = np.cross(firstPointsDirection, np.array([0,1,0]))
+        firstPointsNormal /= np.linalg.norm(firstPointsNormal)
+
+        matrix = vtk.vtkTransform()
+        matrix.RotateWXYZ(fibersAngle, firstPointsDirection[0], firstPointsDirection[1], firstPointsDirection[2])
+        matrix.Update()
+        out = np.zeros(4)
+        matrix.MultiplyPoint(np.concatenate((firstPointsNormal,[1.0])), out)
+        firstPointsNormal = out[:3]
+
+        normals = vtk.vtkDoubleArray()
+        normals.SetNumberOfComponents(3)
+        normals.SetNumberOfTuples(curve.GetNumberOfControlPoints())
+        vtk.vtkPolyLine.GenerateSlidingNormals(p, a, normals, firstPointsNormal)
+        return vtk.util.numpy_support.vtk_to_numpy(normals)
+
+    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, fibersDirectionality, fibersAngle, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, insideModels = [], outsideModels = []):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -630,13 +693,16 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         numberOfPoints = resampledCurve.GetNumberOfControlPoints()
 
         spreads = self.getInterpolatedSpreads(spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints, inputIsClosedCurve)
+
+        normals = self.getNormals(resampledCurve, fibersAngle)
         
         curvePoints = np.array([resampledCurve.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
         outPoints = vtk.vtkPoints()
         outLines = vtk.vtkCellArray()
         id = 0
         for _ in range(numberOfFibers):
-            displacements = self.getPointDisplacements(fibersSampleType, sineCycles, spreads, numberOfPoints)
+            # randomly rotate normals
+            displacements = self.getPointDisplacements(fibersSampleType, sineCycles, fibersDirectionality, normals, spreads, numberOfPoints)
             transformedPoints = curvePoints + displacements
             validPoints = self.applyStartEndConstraints(transformedPoints, startModel, endModel)
             if validPoints.shape[0] < 2:
@@ -661,6 +727,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         outputBundle.SetAndObservePolyData(pd)
         outputBundle.CreateDefaultDisplayNodes()
         outputBundle.GetDisplayNode().SetColorModeToPointFiberOrientation()
+
 
     def getSpreadForNewPosition(self, positions, spreads, newPosition):
         sortedPos, sortedSpreads = zip(*sorted(zip(positions, spreads), key=lambda x: x[0]))
