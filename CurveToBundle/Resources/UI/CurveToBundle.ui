@@ -184,9 +184,9 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton_3">
+    <widget class="ctkCollapsibleButton" name="constraintsCollapsibleButton">
      <property name="text">
-      <string>Constrains</string>
+      <string>Constraints</string>
      </property>
      <layout class="QFormLayout" name="formLayout_4">
       <item row="0" column="0">
@@ -259,16 +259,6 @@
          <string>Singleton</string>
         </property>
        </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label_8">
-        <property name="text">
-         <string>Passthrough:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="ctkCheckableComboBox" name="passthroughModelsCheckableComboBox"/>
       </item>
      </layout>
     </widget>
@@ -431,11 +421,6 @@
   </layout>
  </widget>
  <customwidgets>
-  <customwidget>
-   <class>ctkCheckableComboBox</class>
-   <extends>QComboBox</extends>
-   <header>ctkCheckableComboBox.h</header>
-  </customwidget>
   <customwidget>
    <class>ctkCollapsibleButton</class>
    <extends>QWidget</extends>

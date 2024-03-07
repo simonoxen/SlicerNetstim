@@ -3,12 +3,15 @@ import os
 import json
 
 import vtk
-import qt
+import qt,ctk
 import slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 
 import numpy as np
+
+from CurveToBundleLib.Widgets.multiHandleSlider import MultiHandleSliderWidget
+from CurveToBundleLib.Widgets.multiModelSelector import MultiModelSelectorWidget
 
 #
 # CurveToBundle
@@ -63,7 +66,6 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
         # Waypoints slider widget
-        from CurveToBundleLib.Widgets.multiHandleSlider import MultiHandleSliderWidget
         self.ui.waypointsValueWidget = MultiHandleSliderWidget()
         waypointsLayout = qt.QVBoxLayout(self.ui.waypointsFrame)
         waypointsLayout.addWidget(self.ui.waypointsValueWidget)
@@ -121,6 +123,13 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.updateWaypointsToolButton.setMenu(updateWaypointsMenu)
         self.ui.updateWaypointsToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerCheckForUpdates.png"))
 
+        # Constraints
+        self.ui.insideModelsSelector = MultiModelSelectorWidget()
+        self.ui.constraintsCollapsibleButton.layout().addRow("Inside", self.ui.insideModelsSelector)
+
+        self.ui.outsideModelsSelector = MultiModelSelectorWidget()
+        self.ui.constraintsCollapsibleButton.layout().addRow("Outside", self.ui.outsideModelsSelector)
+
         # Fibers settings
         fibersSettingsMenu = qt.QMenu(self.ui.fibersSettingsToolButton)
 
@@ -135,12 +144,13 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         fibersSampleTypeMenu.addActions(self.ui.fibersSampleTypeActionsGroup.actions())
 
         sineCyclesMenu = fibersSettingsMenu.addMenu("Sine Cycles")
-        self.ui.sineCycles = qt.QSpinBox()
-        self.ui.sineCycles.minimum = 0
-        self.ui.sineCycles.maximum = 10
-        self.ui.sineCycles.value = 2
+        self.ui.sineCyclesSlider = ctk.ctkSliderWidget()
+        self.ui.sineCyclesSlider.minimum = 0
+        self.ui.sineCyclesSlider.maximum = 10
+        self.ui.sineCyclesSlider.value = 2
+        self.ui.sineCyclesSlider.singleStep = 0.1
         action = qt.QWidgetAction(sineCyclesMenu)
-        action.setDefaultWidget(self.ui.sineCycles)
+        action.setDefaultWidget(self.ui.sineCyclesSlider)
         sineCyclesMenu.addAction(action)
 
         self.ui.fibersSettingsToolButton.setMenu(fibersSettingsMenu)
@@ -161,9 +171,6 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NewSceneEvent, self.setUpPassthroughModels)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NodeAddedEvent, self.setUpPassthroughModels)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.NodeRemovedEvent, self.setUpPassthroughModels)
 
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.inpuNodeChanged)
 
@@ -173,18 +180,17 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.startModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.endModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.passthroughModelsCheckableComboBox.checkedIndexesChanged.connect(self.updateParameterNodeFromGUI)
+        self.ui.insideModelsSelector.checkedIndexesChanged.connect(self.updateParameterNodeFromGUI)
+        self.ui.outsideModelsSelector.checkedIndexesChanged.connect(self.updateParameterNodeFromGUI)
         self.ui.numberOfFibersSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
         self.ui.maxSpreadSpinBox.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
         self.ui.splineOrderActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.spreadExtrapolateAction.connect("toggled(bool)", self.updateParameterNodeFromGUI)
         self.ui.fibersSampleTypeActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
         self.ui.spreadModifyActionsGroup.connect("triggered(QAction*)", self.updateParameterNodeFromGUI)
-        self.ui.sineCycles.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
+        self.ui.sineCyclesSlider.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
 
         self.ui.waypointSpreadSlider.connect("valueChanged(double)", self.updateSpreadsFromSlider)
-
-        self.setUpPassthroughModels()
 
         # Buttons
         self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -206,7 +212,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         # Make sure parameter node exists and observed
         self.initializeParameterNode()
-        self.setUpPassthroughModels()
+        self.ui.insideModelsSelector.initialize()
+        self.ui.outsideModelsSelector.initialize()
 
     def exit(self):
         """
@@ -229,7 +236,6 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If this module is shown while the scene is closed then recreate a new parameter node immediately
         if self.parent.isEntered:
             self.initializeParameterNode()
-            self.setUpPassthroughModels()
 
     def initializeParameterNode(self):
         """
@@ -268,32 +274,6 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Initial GUI update
         self.updateGUIFromParameterNode()
-
-    def setUpPassthroughModels(self, caller=None, event=None):
-        self._updatingGUIFromParameterNode = True
-
-        self.ui.passthroughModelsCheckableComboBox.clear()
-        modelNodes = slicer.mrmlScene.GetNodesByClass("vtkMRMLModelNode")
-        modelNodes.UnRegister(modelNodes)
-        for i in range(modelNodes.GetNumberOfItems()):
-            modelNode = modelNodes.GetItemAsObject(i)
-            if not modelNode.GetHideFromEditors() and (hasattr(slicer,'vtkMRMLFiberBundleNode') and not isinstance(modelNode, slicer.vtkMRMLFiberBundleNode)):
-                self.ui.passthroughModelsCheckableComboBox.addItem(self.generateDisplayNameForModel(modelNode))
-                item = self.ui.passthroughModelsCheckableComboBox.model().item(self.ui.passthroughModelsCheckableComboBox.count-1,0)
-                item.setData(modelNode.GetID(), qt.Qt.UserRole)
-                if self._parameterNode and modelNode.GetID() in self._parameterNode.GetParameter("PassthroughModels").split(','):
-                    item.setCheckState(qt.Qt.Checked)
-        
-        self._updatingGUIFromParameterNode = False
-
-    def generateDisplayNameForModel(self, modelNode):
-        shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
-        displayName = modelNode.GetName()
-        item = shNode.GetItemParent(shNode.GetItemByDataNode(modelNode))
-        while item != shNode.GetSceneItemID():
-            displayName = shNode.GetItemName(item) + ' / ' + displayName
-            item = shNode.GetItemParent(item)
-        return displayName
 
     def inpuNodeChanged(self, incomingNode):
         self.setUpCopyPositionMenu()
@@ -341,23 +321,17 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
         self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
-        self.ui.sineCycles.value = int(self._parameterNode.GetParameter("SineCycles"))
+        self.ui.sineCyclesSlider.value = float(self._parameterNode.GetParameter("SineCycles"))
 
         inputIsOpenCurve = not isinstance(self.ui.inputSelector.currentNode(), slicer.vtkMRMLMarkupsClosedCurveNode)
         self.ui.startModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("StartModel") if inputIsOpenCurve else None)
         self.ui.endModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("EndModel") if inputIsOpenCurve else None)
+        self.ui.insideModelsSelector.setSelectedModelsIDs(self._parameterNode.GetParameter("InsideModels"))
+        self.ui.outsideModelsSelector.setSelectedModelsIDs(self._parameterNode.GetParameter("OutsideModels"))
         
         next(filter(lambda action: action.text == self._parameterNode.GetParameter("SplineOrder"), self.ui.splineOrderActionsGroup.actions())).setChecked(True)
         next(filter(lambda action: action.text == self._parameterNode.GetParameter("FibersSampleType"), self.ui.fibersSampleTypeActionsGroup.actions())).setChecked(True)
         next(filter(lambda action: action.text == self._parameterNode.GetParameter("SpreadModify"), self.ui.spreadModifyActionsGroup.actions())).setChecked(True)
-
-        checkedIDs = self._parameterNode.GetParameter("PassthroughModels").split(',')
-        if checkedIDs:
-            for i in range(self.ui.passthroughModelsCheckableComboBox.count):
-                item = self.ui.passthroughModelsCheckableComboBox.model().item(i,0)
-                data = item.data(qt.Qt.UserRole)
-                if data:
-                    item.setCheckState(qt.Qt.Checked if (data in checkedIDs) else qt.Qt.Unchecked)
 
         waypoints = json.loads(self._parameterNode.GetParameter("Waypoints"))
         spreadValue = waypoints[int(self._parameterNode.GetParameter("WaypointIndex"))]['spread']
@@ -405,13 +379,14 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._parameterNode.SetNodeReferenceID("OutputBundle", self.ui.outputSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("StartModel", self.ui.startModelSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("EndModel", self.ui.endModelSelector.currentNodeID)
-        self._parameterNode.SetParameter("PassthroughModels", ','.join([idx.data(qt.Qt.UserRole) for idx in self.ui.passthroughModelsCheckableComboBox.checkedIndexes()]))
+        self._parameterNode.SetParameter("InsideModels", self.ui.insideModelsSelector.getSelectedModelsIDs())
+        self._parameterNode.SetParameter("OutsideModels", self.ui.outsideModelsSelector.getSelectedModelsIDs())
         self._parameterNode.SetParameter("NumberOfFibers", str(self.ui.numberOfFibersSliderWidget.value))
         self._parameterNode.SetParameter("SpreadExtrapolate", str(bool(self.ui.spreadExtrapolateAction.isChecked())))
         self._parameterNode.SetParameter("SplineOrder", [action.text for action in self.ui.splineOrderActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("FibersSampleType", [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0])
         self._parameterNode.SetParameter("SpreadModify", [action.text for action in self.ui.spreadModifyActionsGroup.actions() if action.isChecked()][0])
-        self._parameterNode.SetParameter("SineCycles", str(self.ui.sineCycles.value))
+        self._parameterNode.SetParameter("SineCycles", str(self.ui.sineCyclesSlider.value))
 
         self._parameterNode.EndModify(wasModified)
 
@@ -441,7 +416,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         elif action.text == "U shape":
             positions = [10, 20, 40, 60, 80, 90]
-            values = np.array([0.6, 0.2, 0.15, 0.15, 0.2, 0.6]) * self.ui.maxSpreadSpinBox.value
+            values = np.array([0.7, 0.2, 0.15, 0.15, 0.2, 0.7]) * self.ui.maxSpreadSpinBox.value
             waypoints = [{"position":pos, "spread":val} for pos,val in zip(positions,values)]
             waypointIndex = 0
 
@@ -476,21 +451,23 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             fibersSampleType = [action.text for action in self.ui.fibersSampleTypeActionsGroup.actions() if action.isChecked()][0]
 
-            passthroughModels = [slicer.mrmlScene.GetNodeByID(id) for id in self._parameterNode.GetParameter("PassthroughModels").split(',')]
+            insideModels = [slicer.mrmlScene.GetNodeByID(id) for id in self.ui.insideModelsSelector.getSelectedModelsIDs().split(',')]
+            outsideModels = [slicer.mrmlScene.GetNodeByID(id) for id in self.ui.outsideModelsSelector.getSelectedModelsIDs().split(',')]
 
             # Compute output
             self.logic.process(self.ui.inputSelector.currentNode(), 
                                self.ui.outputSelector.currentNode(),
                                int(self.ui.numberOfFibersSliderWidget.value),
                                fibersSampleType,
-                               self.ui.sineCycles.value,
+                               self.ui.sineCyclesSlider.value,
                                spreadValues,
                                spreadPositions,
                                splineOrder,
                                spreadExtrapolate,
                                self.ui.startModelSelector.currentNode(),
                                self.ui.endModelSelector.currentNode(),
-                               passthroughModels)
+                               insideModels,
+                               outsideModels)
 
 
 
@@ -534,7 +511,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         Initialize parameter node with default settings.
         """
         if not parameterNode.GetParameter("NumberOfFibers"):
-            parameterNode.SetParameter("NumberOfFibers", "100")
+            parameterNode.SetParameter("NumberOfFibers", "50")
         if not parameterNode.GetParameter("Waypoints"):
             parameterNode.SetParameter("Waypoints", json.dumps([{"position":50,"spread":2}]))
         if not parameterNode.GetParameter("WaypointIndex"):
@@ -548,7 +525,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         if not parameterNode.GetParameter("SpreadExtrapolate"):
             parameterNode.SetParameter("SpreadExtrapolate", "True")
         if not parameterNode.GetParameter("FibersSampleType"):
-            parameterNode.SetParameter("FibersSampleType", "uniform")
+            parameterNode.SetParameter("FibersSampleType", "normal")
         if not parameterNode.GetParameter("SineCycles"):
             parameterNode.SetParameter("SineCycles", "2")
 
@@ -590,7 +567,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
 
         return interpolatedSpreads
     
-    def applyConstrains(self, points, startModel, endModel, passthroughModels):
+    def applyStartEndConstraints(self, points, startModel, endModel):
         startIndex = 0
         endIndex = points.shape[0]
         if startModel:
@@ -609,12 +586,28 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
                 if distance < 0:
                     break
                 endIndex -= 1
-        for model in passthroughModels:
-            auxPoints = self.applyConstrains(points[startIndex:endIndex], model, None, [])
-            if auxPoints.shape[0] < 2:
-                startIndex = endIndex
-                break
         return points[startIndex:endIndex]
+
+    def applyInsideOutsideConstraints(self, pd, insideModels, outsideModels):
+        extractPolyData = vtk.vtkExtractPolyDataGeometry()
+        extractPolyData.SetInputData(pd)
+        extractPolyData.SetImplicitFunction(vtk.vtkImplicitPolyDataDistance())
+        
+        extractPolyData.SetExtractInside(True)
+        extractPolyData.SetExtractBoundaryCells(True)        
+        for model in insideModels:
+            if model:
+                extractPolyData.GetImplicitFunction().SetInput(model.GetPolyData())
+                extractPolyData.Update()
+                pd.DeepCopy(extractPolyData.GetOutput())
+        
+        extractPolyData.SetExtractInside(False)
+        extractPolyData.SetExtractBoundaryCells(False)
+        for model in outsideModels:
+            if model:
+                extractPolyData.GetImplicitFunction().SetInput(model.GetPolyData())
+                extractPolyData.Update()
+                pd.DeepCopy(extractPolyData.GetOutput())
 
     def getPointDisplacements(self, fibersSampleType, sineCycles, spreads, numberOfPoints):
         if fibersSampleType == 'uniform':
@@ -624,7 +617,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         sine = np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, sineCycles*np.pi, numberOfPoints))
         return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sine[:,np.newaxis]
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, passthroughModels = []):
+    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, insideModels = [], outsideModels = []):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -645,7 +638,7 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         for _ in range(numberOfFibers):
             displacements = self.getPointDisplacements(fibersSampleType, sineCycles, spreads, numberOfPoints)
             transformedPoints = curvePoints + displacements
-            validPoints = self.applyConstrains(transformedPoints, startModel, endModel, passthroughModels)
+            validPoints = self.applyStartEndConstraints(transformedPoints, startModel, endModel)
             if validPoints.shape[0] < 2:
                 continue
             line = vtk.vtkPolyLine()
@@ -662,6 +655,8 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         pd = vtk.vtkPolyData()
         pd.SetPoints(outPoints)
         pd.SetLines(outLines)
+
+        self.applyInsideOutsideConstraints(pd, insideModels, outsideModels)
 
         outputBundle.SetAndObservePolyData(pd)
         outputBundle.CreateDefaultDisplayNodes()
@@ -714,35 +709,5 @@ class CurveToBundleTest(ScriptedLoadableModuleTest):
         """
 
         self.delayDisplay("Starting the test")
-
-        # Get/create input data
-
-        import SampleData
-        registerSampleData()
-        inputVolume = SampleData.downloadSample('CurveToBundle1')
-        self.delayDisplay('Loaded test data set')
-
-        inputScalarRange = inputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(inputScalarRange[0], 0)
-        self.assertEqual(inputScalarRange[1], 695)
-
-        outputVolume = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
-        threshold = 100
-
-        # Test the module logic
-
-        logic = CurveToBundleLogic()
-
-        # Test algorithm with non-inverted threshold
-        logic.process(inputVolume, outputVolume, threshold, True)
-        outputScalarRange = outputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-        self.assertEqual(outputScalarRange[1], threshold)
-
-        # Test algorithm with inverted threshold
-        logic.process(inputVolume, outputVolume, threshold, False)
-        outputScalarRange = outputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-        self.assertEqual(outputScalarRange[1], inputScalarRange[1])
 
         self.delayDisplay('Test passed')
