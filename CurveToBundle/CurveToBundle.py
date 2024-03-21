@@ -455,7 +455,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             outsideModels = [slicer.mrmlScene.GetNodeByID(id) for id in self.ui.outsideModelsSelector.getSelectedModelsIDs().split(',')]
 
             # Compute output
-            self.logic.process(self.ui.inputSelector.currentNode(), 
+            numberOfFibers = self.logic.process(self.ui.inputSelector.currentNode(), 
                                self.ui.outputSelector.currentNode(),
                                int(self.ui.numberOfFibersSliderWidget.value),
                                fibersSampleType,
@@ -468,6 +468,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                self.ui.endModelSelector.currentNode(),
                                insideModels,
                                outsideModels)
+            
+            self.ui.outputFibersLabel.setText(str(numberOfFibers))
 
 
 
@@ -661,6 +663,8 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         outputBundle.SetAndObservePolyData(pd)
         outputBundle.CreateDefaultDisplayNodes()
         outputBundle.GetDisplayNode().SetColorModeToPointFiberOrientation()
+
+        return pd.GetLines().GetNumberOfCells()
 
     def getSpreadForNewPosition(self, positions, spreads, newPosition):
         sortedPos, sortedSpreads = zip(*sorted(zip(positions, spreads), key=lambda x: x[0]))
