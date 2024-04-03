@@ -65,6 +65,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
+        self.ui.parameterNodeSelector.addAttribute("vtkMRMLScriptedModuleNode", "ModuleName", self.moduleName)
+
         # Waypoints slider widget
         self.ui.waypointsValueWidget = MultiHandleSliderWidget()
         waypointsLayout = qt.QVBoxLayout(self.ui.waypointsFrame)
@@ -172,6 +174,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
+        self.ui.parameterNodeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.setParameterNode)
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.inpuNodeChanged)
 
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
@@ -261,6 +264,11 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if inputParameterNode:
             self.logic.setDefaultParameters(inputParameterNode)
 
+        # Set parameter node in the parameter node selector widget
+        wasBlocked = self.ui.parameterNodeSelector.blockSignals(True)
+        self.ui.parameterNodeSelector.setCurrentNode(inputParameterNode)
+        self.ui.parameterNodeSelector.blockSignals(wasBlocked)
+
         # Unobserve previously selected parameter node and add an observer to the newly selected.
         # Changes of parameter node are observed so that whenever parameters are changed by a script or any other module
         # those are reflected immediately in the GUI.
@@ -287,8 +295,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onMarkupsModified(self, caller, event):
         self.setUpCopyPositionMenu()
-        if self.ui.autoApplyCheckBox.checked:
-            self.onApplyButton()
+        self.updateGUIFromParameterNode()
 
     def setUpCopyPositionMenu(self, caller=None, event=None):
         inputCurve = self.ui.inputSelector.currentNode()
@@ -346,6 +353,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             self.ui.applyButton.toolTip = "Select input and output nodes"
             self.ui.applyButton.enabled = False
+            self.ui.autoApplyCheckBox.checked = False
             self.ui.autoApplyCheckBox.enabled = False
 
         self.ui.startModelSelector.enabled = inputIsOpenCurve
