@@ -132,6 +132,30 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.outsideModelsSelector = MultiModelSelectorWidget()
         self.ui.constraintsCollapsibleButton.layout().addRow("Outside", self.ui.outsideModelsSelector)
 
+        # Save as trk
+        saveAsTrkMenu = qt.QMenu(self.ui.saveAsTrkToolButton)
+
+        saveReferenceMenu = saveAsTrkMenu.addMenu("Reference")
+        self.ui.saveReferenceVolumeComboBox = slicer.qMRMLNodeComboBox()
+        self.ui.saveReferenceVolumeComboBox.nodeTypes = ["vtkMRMLScalarVolumeNode"]
+        self.ui.saveReferenceVolumeComboBox.selectNodeUponCreation = False
+        self.ui.saveReferenceVolumeComboBox.addEnabled = False
+        self.ui.saveReferenceVolumeComboBox.removeEnabled = False
+        self.ui.saveReferenceVolumeComboBox.noneEnabled = True
+        self.ui.saveReferenceVolumeComboBox.showHidden = False
+        self.ui.saveReferenceVolumeComboBox.showChildNodeTypes = False
+        self.ui.saveReferenceVolumeComboBox.setMRMLScene(slicer.mrmlScene)
+        action = qt.QWidgetAction(saveReferenceMenu)
+        action.setDefaultWidget(self.ui.saveReferenceVolumeComboBox)
+        saveReferenceMenu.addAction(action)
+
+        saveAsTrkAction = qt.QAction("Save as .trk", self.ui.saveAsTrkToolButton)
+        saveAsTrkAction.setToolTip("Save the output as .trk file")
+        saveAsTrkAction.connect('triggered()', self.onSaveAsTrk)
+        self.ui.saveAsTrkToolButton.setDefaultAction(saveAsTrkAction)
+        self.ui.saveAsTrkToolButton.setMenu(saveAsTrkMenu)
+        self.ui.saveAsTrkToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerSave.png"))
+
         # Fibers settings
         fibersSettingsMenu = qt.QMenu(self.ui.fibersSettingsToolButton)
 
@@ -173,6 +197,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
+        self.parent.connect('mrmlSceneChanged(vtkMRMLScene*)', self.ui.saveReferenceVolumeComboBox, 'setMRMLScene(vtkMRMLScene*)')
 
         self.ui.parameterNodeSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.setParameterNode)
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.inpuNodeChanged)
@@ -298,9 +323,9 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.updateGUIFromParameterNode()
 
     def setUpCopyPositionMenu(self, caller=None, event=None):
+        self.ui.copyPositionMenu.clear()
         inputCurve = self.ui.inputSelector.currentNode()
-        if inputCurve:
-            self.ui.copyPositionMenu.clear()
+        if inputCurve and inputCurve.GetNumberOfControlPoints() > 1:
             self.ui.copyPositionActionGroup = qt.QActionGroup(self.ui.copyPositionMenu)
             for i in range(inputCurve.GetNumberOfControlPoints()):
                 action = qt.QAction(inputCurve.GetNthControlPointLabel(i), self.ui.copyPositionMenu)
@@ -362,6 +387,9 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not hasattr(slicer,'vtkMRMLFiberBundleNode'):
             self.ui.outputSelector.enabled = False
             self.ui.outputSelector.toolTip = "This module requires the SlicerDMRI extension"
+        
+        if self._parameterNode.GetNodeReference("OutputBundle"):
+            self.ui.saveAsTrkToolButton.enabled = True
         
         self.setUpCopyPositionMenu()
 
@@ -479,6 +507,19 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             
             self.ui.outputFibersLabel.setText(str(numberOfFibers))
 
+    def onSaveAsTrk(self):
+        outputBundleNode = self.ui.outputSelector.currentNode()
+        if not outputBundleNode:
+            return
+        
+        referenceNode = self.ui.saveReferenceVolumeComboBox.currentNode()
+        if not referenceNode:
+            qt.QMessageBox().warning(qt.QWidget(), "", "Select reference node.")
+            return
+
+        trkPath = qt.QFileDialog.getSaveFileName(slicer.util.mainWindow(), "Save as .trk", "", "Trackvis files (*.trk)")
+        if trkPath:
+            self.logic.saveBundleAsTrk(outputBundleNode, referenceNode, trkPath)
 
 
 #
@@ -686,6 +727,40 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         else:
             spread = (sortedSpreads[i-2] + sortedSpreads[i-1])/2
         return spread
+
+    def saveBundleAsTrk(self, outputBundle, referenceNode, trkPath):
+        try:
+            import dipy
+        except:
+            slicer.util.pip_install('fury')
+            slicer.util.pip_install('dipy')
+        
+        from dipy.io.streamline import load_vtk_streamlines, save_trk
+        from dipy.io.stateful_tractogram import StatefulTractogram, Space
+
+        if referenceNode.GetStorageNode() and referenceNode.GetStorageNode().GetFileName() and os.path.exists(referenceNode.GetStorageNode().GetFileName()):
+            referenceFile = referenceNode.GetStorageNode().GetFileName()
+            shouldRemoveReference = False
+        else:
+            referenceFile = slicer.app.temporaryPath + '/' + os.path.basename(trkPath).replace('.trk', '.nii')
+            slicer.util.saveNode(referenceNode, referenceFile)
+            shouldRemoveReference = True
+
+        vtkPath = trkPath.replace('.trk', '.vtk')
+        slicer.util.saveNode(outputBundle, vtkPath)
+
+        streamlines = load_vtk_streamlines(vtkPath)
+        streamlines = [x * np.array([-1,-1,1]) for x in streamlines]
+
+        st = StatefulTractogram(streamlines, referenceFile, Space.RASMM)
+        save_trk(st, trkPath, False)
+
+        os.remove(vtkPath)
+        if shouldRemoveReference:
+            os.remove(referenceFile)
+
+        qt.QMessageBox().information(qt.QWidget(), "", "Done!")
+
 #
 # CurveToBundleTest
 #
