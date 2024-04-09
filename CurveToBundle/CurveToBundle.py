@@ -67,6 +67,9 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.parameterNodeSelector.addAttribute("vtkMRMLScriptedModuleNode", "ModuleName", self.moduleName)
 
+        self.ui.duplicateParameterSetToolButton.setIcon(qt.QIcon(":/Icons/Small/SlicerEditCopy.png"))
+        self.ui.duplicateParameterSetToolButton.connect('clicked()', self.onDuplicateParameterSet)
+
         # Waypoints slider widget
         self.ui.waypointsValueWidget = MultiHandleSliderWidget()
         waypointsLayout = qt.QVBoxLayout(self.ui.waypointsFrame)
@@ -334,6 +337,12 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.copyPositionMenu.addActions(self.ui.copyPositionActionGroup.actions())
             self.ui.copyPositionActionGroup.connect("triggered(QAction*)", self.updateWaypoints)
 
+    def onDuplicateParameterSet(self):
+        duplicate = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScriptedModuleNode")
+        duplicate.Copy(self._parameterNode)
+        duplicate.SetName(slicer.mrmlScene.GenerateUniqueName(self._parameterNode.GetName() + '_Copy'))
+        self.setParameterNode(duplicate)
+
     def updateGUIFromParameterNode(self, caller=None, event=None):
         """
         This method is called whenever parameter node is changed.
@@ -347,9 +356,10 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._updatingGUIFromParameterNode = True
 
         # Update node selectors and sliders
-        self.ui.waypointSpreadSlider.maximum = int(self._parameterNode.GetParameter("MaxSpread"))
-        self.ui.waypointSpreadSlider.singleStep = float(self._parameterNode.GetParameter("MaxSpread")) / 50.0
-        self.ui.maxSpreadSpinBox.value = int(self._parameterNode.GetParameter("MaxSpread"))
+        maxSpread = self._parameterNode.GetParameter("MaxSpread") if self._parameterNode.GetParameter("MaxSpread") else "5"
+        self.ui.waypointSpreadSlider.maximum = int(maxSpread)
+        self.ui.waypointSpreadSlider.singleStep = float(maxSpread) / 50.0
+        self.ui.maxSpreadSpinBox.value = int(maxSpread)
         self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputCurve"))
         self.ui.betweenCurveSelector.setCurrentNode(self._parameterNode.GetNodeReference("BetweenCurve"))
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
