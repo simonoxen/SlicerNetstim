@@ -205,6 +205,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
         # (in the selected parameter node).
         self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+        self.ui.betweenCurveSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.startModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
         self.ui.endModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
@@ -350,6 +351,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.waypointSpreadSlider.singleStep = float(self._parameterNode.GetParameter("MaxSpread")) / 50.0
         self.ui.maxSpreadSpinBox.value = int(self._parameterNode.GetParameter("MaxSpread"))
         self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputCurve"))
+        self.ui.betweenCurveSelector.setCurrentNode(self._parameterNode.GetNodeReference("BetweenCurve"))
         self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputBundle"))
         self.ui.numberOfFibersSliderWidget.value = float(self._parameterNode.GetParameter("NumberOfFibers"))
         self.ui.spreadExtrapolateAction.setChecked(self._parameterNode.GetParameter("SpreadExtrapolate") == "True")
@@ -412,6 +414,7 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self._parameterNode.SetParameter("MaxSpread", str(self.ui.maxSpreadSpinBox.value))
         self._parameterNode.SetNodeReferenceID("InputCurve", self.ui.inputSelector.currentNodeID)
+        self._parameterNode.SetNodeReferenceID("BetweenCurve", self.ui.betweenCurveSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("OutputBundle", self.ui.outputSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("StartModel", self.ui.startModelSelector.currentNodeID)
         self._parameterNode.SetNodeReferenceID("EndModel", self.ui.endModelSelector.currentNodeID)
@@ -491,7 +494,8 @@ class CurveToBundleWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             outsideModels = [slicer.mrmlScene.GetNodeByID(id) for id in self.ui.outsideModelsSelector.getSelectedModelsIDs().split(',')]
 
             # Compute output
-            numberOfFibers = self.logic.process(self.ui.inputSelector.currentNode(), 
+            numberOfFibers = self.logic.process(self.ui.inputSelector.currentNode(),
+                               self.ui.betweenCurveSelector.currentNode(), 
                                self.ui.outputSelector.currentNode(),
                                int(self.ui.numberOfFibersSliderWidget.value),
                                fibersSampleType,
@@ -668,7 +672,13 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         sine = np.sin((np.random.rand(1) * 2*np.pi) + np.linspace(0, sineCycles*np.pi, numberOfPoints))
         return np.tile(randomTranslate, (numberOfPoints,1)) * spreads[:,np.newaxis] * sine[:,np.newaxis]
 
-    def process(self, inputCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, insideModels = [], outsideModels = []):
+    def getPointsBetween(self, curvePoints1, curvePoints2):
+        direction = curvePoints2 - curvePoints1
+        distance = np.linalg.norm(direction, axis=1)
+        normalizedDirection = direction / distance[:,np.newaxis]
+        return curvePoints1 + normalizedDirection * distance[:,np.newaxis] * np.random.rand()
+
+    def process(self, inputCurve, betweenCurve, outputBundle, numberOfFibers, fibersSampleType, sineCycles, spreadValues, spreadPositions, splineOrder, spreadExtrapolate, startModel = None, endModel = None, insideModels = [], outsideModels = []):
         if not inputCurve or not outputBundle:
             raise ValueError("Input or output volume is invalid")
         
@@ -679,16 +689,26 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
         resampledCurve.ResampleCurveWorld(1) # 1mm spacing
 
         numberOfPoints = resampledCurve.GetNumberOfControlPoints()
+        curvePoints = np.array([resampledCurve.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
+
+        if betweenCurve is not None:
+            betweenCurveResampled = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLMarkupsClosedCurveNode" if inputIsClosedCurve else "vtkMRMLMarkupsCurveNode")
+            betweenCurveResampled.Copy(betweenCurve)
+            betweenCurveResampled.ResampleCurveWorld(betweenCurveResampled.GetCurveLengthWorld() / max((numberOfPoints - 1), 1))
+            betweenCurvePoints = np.array([betweenCurveResampled.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
 
         spreads = self.getInterpolatedSpreads(spreadValues, spreadPositions, splineOrder, spreadExtrapolate, numberOfPoints, inputIsClosedCurve)
         
-        curvePoints = np.array([resampledCurve.GetNthControlPointPosition(i) for i in range(numberOfPoints)])
         outPoints = vtk.vtkPoints()
         outLines = vtk.vtkCellArray()
         id = 0
         for _ in range(numberOfFibers):
             displacements = self.getPointDisplacements(fibersSampleType, sineCycles, spreads, numberOfPoints)
-            transformedPoints = curvePoints + displacements
+            if betweenCurve is None:
+                localPoints = curvePoints
+            else:
+                localPoints = self.getPointsBetween(betweenCurvePoints, curvePoints)
+            transformedPoints = localPoints + displacements
             validPoints = self.applyStartEndConstraints(transformedPoints, startModel, endModel)
             if validPoints.shape[0] < 2:
                 continue
@@ -702,6 +722,8 @@ class CurveToBundleLogic(ScriptedLoadableModuleLogic):
             outLines.InsertNextCell(line)
         
         slicer.mrmlScene.RemoveNode(resampledCurve)
+        if betweenCurve is not None:
+            slicer.mrmlScene.RemoveNode(betweenCurveResampled)
 
         pd = vtk.vtkPolyData()
         pd.SetPoints(outPoints)
